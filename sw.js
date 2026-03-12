@@ -1,5 +1,4 @@
-const CACHE_NAME = 'musamar-hub-v2';
-const BASE = self.registration.scope;
+const CACHE_NAME = 'musamar-hub-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -25,19 +24,14 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(response => {
-        if (response && response.status === 200) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
-        }
-        return response;
-      }).catch(() => {
-        if (e.request.destination === 'document') {
-          return caches.match(BASE + 'index.html');
-        }
-      });
+    fetch(e.request).then(response => {
+      if (response && response.status === 200) {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+      }
+      return response;
+    }).catch(() => {
+      return caches.match(e.request);
     })
   );
 });
