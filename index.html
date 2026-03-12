@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='11';
+var APP_V='12';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -38,6 +38,10 @@ body { display: flex; flex-direction: column; }
 /* ===== HEADER (Mobile) ===== */
 .header { display: flex; background: var(--bg2); border-bottom: 1px solid var(--border); padding: 12px 16px; padding-top: calc(12px + var(--safe-top)); align-items: center; justify-content: space-between; z-index: 50; }
 .header-logo { font-family: var(--font-display); font-size: 20px; font-weight: 600; color: var(--gold); letter-spacing: 4px; }
+.header-left { display: flex; align-items: center; gap: 8px; }
+.header-tab { font-size: 10px; color: var(--muted); letter-spacing: 2px; }
+.menu-btn { background: none; border: 1px solid var(--border); color: var(--gold); font-size: 20px; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+.menu-btn:active { background: rgba(212,169,106,0.12); }
 
 /* ===== LAYOUT ===== */
 .app { display: flex; flex: 1; overflow: hidden; }
@@ -55,26 +59,22 @@ body { display: flex; flex-direction: column; }
 .nav-btn.active .icon { opacity: 1; }
 
 /* ===== MAIN ===== */
-.main { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 20px 16px; padding-bottom: calc(20px + var(--safe-bottom)); display: flex; flex-direction: column; }
+.main { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 20px 16px 32px; display: flex; flex-direction: column; }
 
-/* ===== BOTTOM NAV (Mobile) ===== */
-.bottom-nav { display: block; background: var(--bg2); border-top: 1px solid var(--border); padding: 6px 0 0; padding-bottom: var(--safe-bottom); }
-.bottom-nav-inner { display: flex; align-items: stretch; }
-.bnav-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: none; border: none; color: var(--faint); font-size: 9px; font-family: var(--font-body); letter-spacing: 0.3px; padding: 4px 0 8px; cursor: pointer; flex: 1; min-width: 0; }
-.bnav-btn .bnav-icon { font-size: 20px; line-height: 1; }
-.bnav-btn.active { color: var(--gold); }
+/* ===== BOTTOM NAV (Mobile) — hidden, kept for desktop ===== */
+.bottom-nav { display: none; }
 /* Tab menu overlay */
-.tab-menu-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 999; backdrop-filter: blur(4px); }
-.tab-menu-overlay.open { display: flex; align-items: flex-end; }
-.tab-menu { width: 100%; background: var(--bg2); border-top: 1px solid var(--border); border-radius: 18px 18px 0 0; padding: 20px 16px; padding-bottom: calc(20px + var(--safe-bottom)); }
-.tab-menu-title { font-family: var(--font-display); font-size: 13px; color: var(--dim); letter-spacing: 1.5px; margin-bottom: 16px; text-align: center; }
-.tab-menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.tab-menu-item { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 8px; border-radius: 10px; background: rgba(212,169,106,0.04); border: 1px solid transparent; cursor: pointer; transition: all 0.15s; }
+.tab-menu-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999; backdrop-filter: blur(4px); }
+.tab-menu-overlay.open { display: block; }
+.tab-menu { position: absolute; top: calc(12px + var(--safe-top) + 48px); right: 12px; width: 220px; background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+.tab-menu-title { font-family: var(--font-display); font-size: 11px; color: var(--dim); letter-spacing: 1.5px; margin-bottom: 8px; padding: 0 4px; }
+.tab-menu-grid { display: flex; flex-direction: column; gap: 2px; }
+.tab-menu-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: transparent; border: none; cursor: pointer; transition: all 0.15s; }
 .tab-menu-item:active { background: rgba(212,169,106,0.12); }
-.tab-menu-item.active { border-color: var(--gold); background: rgba(212,169,106,0.1); }
-.tab-menu-item .tmi-icon { font-size: 22px; }
-.tab-menu-item .tmi-label { font-size: 11px; color: var(--text); letter-spacing: 0.3px; }
-.tab-menu-item.active .tmi-label { color: var(--gold); }
+.tab-menu-item.active { background: rgba(212,169,106,0.1); }
+.tab-menu-item .tmi-icon { font-size: 18px; width: 24px; text-align: center; }
+.tab-menu-item .tmi-label { font-size: 13px; color: var(--text); letter-spacing: 0.3px; }
+.tab-menu-item.active .tmi-label { color: var(--gold); font-weight: 500; }
 
 /* ===== COMPONENTS ===== */
 .section-header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 28px; flex-wrap: wrap; gap: 12px; }
@@ -213,8 +213,11 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 
 <!-- HEADER (mobile) -->
 <div class="header">
-  <span class="header-logo">MUSAMAR</span>
-  <span style="font-size:10px;color:var(--muted);letter-spacing:2px">HUB</span>
+  <div class="header-left">
+    <span class="header-logo">MUSAMAR</span>
+    <span class="header-tab" id="header-tab"></span>
+  </div>
+  <button class="menu-btn" onclick="openTabMenu()" aria-label="Menu">≡</button>
 </div>
 
 <!-- APP -->
@@ -382,16 +385,12 @@ function openModal(title, content) {
 function closeModal() { $('#modal-overlay').classList.remove('open'); }
 $('#modal-overlay').addEventListener('click', e => { if(e.target.id==='modal-overlay') closeModal(); });
 
-const NAV_PINNED = ['inspiration','recipes','chat','objectives'];
-
 function renderNav() {
   const sb = $('#sidebar-nav');
-  const bn = $('#bottom-nav');
   sb.innerHTML = TABS.map(t=>`<button class="nav-btn ${activeTab===t.id?'active':''}" onclick="switchTab('${t.id}')"><span class="icon">${t.icon}</span>${t.label}</button>`).join('');
-  const pinned = TABS.filter(t=>NAV_PINNED.includes(t.id));
-  const activeInMore = !NAV_PINNED.includes(activeTab);
-  bn.innerHTML = pinned.map(t=>`<button class="bnav-btn ${activeTab===t.id?'active':''}" onclick="switchTab('${t.id}')"><span class="bnav-icon">${t.icon}</span>${t.label}</button>`).join('')
-    + `<button class="bnav-btn ${activeInMore?'active':''}" onclick="openTabMenu()"><span class="bnav-icon">≡</span>Mais</button>`;
+  const cur = TABS.find(t=>t.id===activeTab);
+  const ht = $('#header-tab');
+  if(ht && cur) ht.textContent = cur.label.toUpperCase();
   const grid = $('#tab-menu-grid');
   if(grid) grid.innerHTML = TABS.map(t=>`<div class="tab-menu-item ${activeTab===t.id?'active':''}" onclick="switchTab('${t.id}');closeTabMenu()"><span class="tmi-icon">${t.icon}</span><span class="tmi-label">${t.label}</span></div>`).join('');
 }
