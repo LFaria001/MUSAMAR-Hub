@@ -293,7 +293,14 @@ function requestNotifications() {
   }
 }
 function showNotification(user, body) {
-  if('Notification' in window && Notification.permission === 'granted') {
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+  if('serviceWorker' in navigator) {
+    navigator.serviceWorker.ready.then(reg => {
+      reg.showNotification('Musamar Hub — ' + user, { body, icon: 'icons/icon-192.png', tag: 'musamar-msg', renotify: true });
+    }).catch(() => {
+      new Notification('Musamar Hub — ' + user, { body, icon: 'icons/icon-192.png', tag: 'musamar-msg' });
+    });
+  } else {
     new Notification('Musamar Hub — ' + user, { body, icon: 'icons/icon-192.png', tag: 'musamar-msg' });
   }
 }
@@ -694,7 +701,7 @@ function esc(s) { if(!s) return ''; const d=document.createElement('div'); d.tex
 
 // ===== SERVICE WORKER =====
 if('serviceWorker' in navigator) {
-  const SW_VERSION = 5;
+  const SW_VERSION = 6;
   const swKey = 'sw-version';
   const current = parseInt(localStorage.getItem(swKey) || '0');
   if(current < SW_VERSION) {
@@ -714,6 +721,12 @@ if('serviceWorker' in navigator) {
 // ===== INIT =====
 renderNav();
 render();
+// Request notification permission on load (needs user gesture on iOS, so also request on first tap)
+if(chatUser) requestNotifications();
+document.addEventListener('click', function onFirstClick() {
+  if(chatUser) requestNotifications();
+  document.removeEventListener('click', onFirstClick);
+}, { once: true });
 </script>
 </body>
 </html>
