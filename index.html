@@ -157,6 +157,8 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   .req-row span:nth-child(4), .req-header span:nth-child(4) { grid-column: auto; }
 }
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
@@ -217,10 +219,73 @@ const DEFAULT = { inspiration:[], recipes:[], finances:[], brandAssets:[], chat:
 let state = JSON.parse(JSON.stringify(DEFAULT));
 let activeTab = 'inspiration';
 
-// ===== PERSISTENCE =====
-function load() { try { const d = localStorage.getItem('musamar-hub'); if(d) state = JSON.parse(d); } catch(e){} }
-function save() { try { localStorage.setItem('musamar-hub', JSON.stringify(state)); } catch(e){} }
-load();
+// ===== FIREBASE =====
+firebase.initializeApp({
+  apiKey: "AIzaSyBkIkvjdQ1Mzorquq6PlDCXuosIJDzwEWU",
+  authDomain: "musamar-hub.firebaseapp.com",
+  projectId: "musamar-hub",
+  storageBucket: "musamar-hub.firebasestorage.app",
+  messagingSenderId: "429342019448",
+  appId: "1:429342019448:web:3342971f2f08093420028d"
+});
+const db = firebase.firestore();
+const stateRef = db.collection('hub').doc('state');
+
+// Load from localStorage first (instant display)
+function loadLocal() { try { const d = localStorage.getItem('musamar-hub'); if(d) { const p = JSON.parse(d); Object.assign(state, p); } } catch(e){} }
+function saveLocal() { try { localStorage.setItem('musamar-hub', JSON.stringify(state)); } catch(e){} }
+loadLocal();
+
+// Save to Firestore
+function save() {
+  saveLocal();
+  stateRef.set({
+    inspiration: state.inspiration,
+    recipes: state.recipes,
+    finances: state.finances,
+    brandAssets: state.brandAssets || [],
+    chat: state.chat,
+    objectives: state.objectives,
+    weekLabel: state.weekLabel,
+    lastEditor: chatUser,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(e => console.warn('Firestore save error:', e));
+}
+
+// Real-time sync
+let initialLoad = true;
+stateRef.onSnapshot(snap => {
+  if(snap.metadata.hasPendingWrites) return;
+  if(!snap.exists) { save(); return; }
+  const data = snap.data();
+  const prevChatLen = state.chat ? state.chat.length : 0;
+  state.inspiration = data.inspiration || [];
+  state.recipes = data.recipes || [];
+  state.finances = data.finances || [];
+  state.brandAssets = data.brandAssets || [];
+  state.chat = data.chat || [];
+  state.objectives = data.objectives || DEFAULT.objectives;
+  state.weekLabel = data.weekLabel || '';
+  saveLocal();
+  render();
+  if(!initialLoad && data.chat && data.chat.length > prevChatLen && data.lastEditor !== chatUser) {
+    const lastMsg = data.chat[data.chat.length - 1];
+    showNotification(lastMsg.user, lastMsg.text);
+  }
+  initialLoad = false;
+}, err => console.warn('Firestore listen error:', err));
+
+// ===== NOTIFICATIONS =====
+function requestNotifications() {
+  if('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+function showNotification(user, body) {
+  if('Notification' in window && Notification.permission === 'granted') {
+    new Notification('Musamar Hub — ' + user, { body, icon: 'icons/icon-192.png', tag: 'musamar-msg' });
+  }
+}
 
 // ===== HELPERS =====
 const $=s=>document.querySelector(s);
@@ -243,7 +308,7 @@ function renderNav() {
   bn.innerHTML = TABS.map(t=>`<button class="bnav-btn ${activeTab===t.id?'active':''}" onclick="switchTab('${t.id}')"><span class="bnav-icon">${t.icon}</span>${t.label}</button>`).join('');
 }
 
-function switchTab(id) { activeTab=id; renderNav(); render(); }
+function switchTab(id) { activeTab=id; renderNav(); render(); requestNotifications(); }
 
 function render() {
   const m=$('#main');
@@ -607,7 +672,7 @@ function esc(s) { if(!s) return ''; const d=document.createElement('div'); d.tex
 
 // ===== SERVICE WORKER =====
 if('serviceWorker' in navigator) {
-  const SW_VERSION = 3;
+  const SW_VERSION = 4;
   const swKey = 'sw-version';
   const current = parseInt(localStorage.getItem(swKey) || '0');
   if(current < SW_VERSION) {
