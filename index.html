@@ -2,6 +2,13 @@
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
+<script>
+// Auto-update: fetch version file (cache-busted), redirect if outdated
+var APP_V='2';
+fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
+  v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
+}).catch(function(){});
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
