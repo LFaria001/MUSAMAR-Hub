@@ -607,7 +607,21 @@ function esc(s) { if(!s) return ''; const d=document.createElement('div'); d.tex
 
 // ===== SERVICE WORKER =====
 if('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  const SW_VERSION = 3;
+  const swKey = 'sw-version';
+  const current = parseInt(localStorage.getItem(swKey) || '0');
+  if(current < SW_VERSION) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      return Promise.all(regs.map(r => r.unregister()));
+    }).then(() => caches.keys()).then(keys => {
+      return Promise.all(keys.map(k => caches.delete(k)));
+    }).then(() => {
+      localStorage.setItem(swKey, String(SW_VERSION));
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+    }).catch(()=>{});
+  } else {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => reg.update()).catch(()=>{});
+  }
 }
 
 // ===== INIT =====
