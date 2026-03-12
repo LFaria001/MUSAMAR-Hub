@@ -162,6 +162,17 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 </head>
 <body>
 
+<!-- IDENTITY SCREEN -->
+<div id="identity-screen" style="position:fixed;inset:0;background:var(--bg);z-index:200;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;display:none">
+  <h1 style="font-family:var(--font-display);font-size:36px;color:var(--gold);letter-spacing:6px;margin-bottom:8px">MUSAMAR</h1>
+  <p style="font-size:11px;color:var(--muted);letter-spacing:3px;text-transform:uppercase;margin-bottom:48px">Business Hub</p>
+  <p style="font-size:14px;color:var(--text);margin-bottom:24px">Quem és tu?</p>
+  <div style="display:flex;flex-direction:column;gap:14px;width:100%;max-width:280px">
+    <button onclick="pickIdentity('farifari')" style="padding:16px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--gold);font-family:var(--font-display);font-size:20px;font-weight:500;cursor:pointer;letter-spacing:2px;transition:all 0.2s">farifari</button>
+    <button onclick="pickIdentity('Mariah Crispy')" style="padding:16px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--gold);font-family:var(--font-display);font-size:20px;font-weight:500;cursor:pointer;letter-spacing:2px;transition:all 0.2s">Mariah Crispy</button>
+  </div>
+</div>
+
 <!-- HEADER (mobile) -->
 <div class="header">
   <span class="header-logo">MUSAMAR</span>
@@ -542,7 +553,21 @@ function openLogoGuide() {
 }
 
 // ===== 5. CHAT =====
-let chatUser = 'farifari';
+let chatUser = localStorage.getItem('musamar-identity') || '';
+
+function pickIdentity(name) {
+  localStorage.setItem('musamar-identity', name);
+  chatUser = name;
+  document.getElementById('identity-screen').style.display = 'none';
+  requestNotifications();
+}
+
+// Show identity screen if not set
+if(!chatUser) {
+  document.getElementById('identity-screen').style.display = 'flex';
+} else {
+  document.getElementById('identity-screen').style.display = 'none';
+}
 
 function renderChat(el) {
   const msgs=state.chat;
@@ -568,10 +593,7 @@ function renderChat(el) {
         `).join('')}
       </div>
       <div class="chat-input-bar">
-        <select class="input" style="width:120px" onchange="chatUser=this.value">
-          <option ${chatUser==='farifari'?'selected':''}>farifari</option>
-          <option ${chatUser==='Mariah Crispy'?'selected':''}>Mariah Crispy</option>
-        </select>
+        <span style="font-size:11px;color:var(--gold);font-weight:600;white-space:nowrap;letter-spacing:0.5px">${esc(chatUser)}</span>
         <input class="input" id="chat-input" placeholder="Escreve uma mensagem..." onkeydown="if(event.key==='Enter')sendChat()" style="flex:1">
         <button class="btn btn-primary" onclick="sendChat()">Enviar</button>
       </div>
@@ -672,7 +694,7 @@ function esc(s) { if(!s) return ''; const d=document.createElement('div'); d.tex
 
 // ===== SERVICE WORKER =====
 if('serviceWorker' in navigator) {
-  const SW_VERSION = 4;
+  const SW_VERSION = 5;
   const swKey = 'sw-version';
   const current = parseInt(localStorage.getItem(swKey) || '0');
   if(current < SW_VERSION) {
