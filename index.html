@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='14';
+var APP_V='15';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -205,6 +205,7 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 </head>
 <body>
 
@@ -305,6 +306,7 @@ firebase.initializeApp({
   appId: "1:429342019448:web:3342971f2f08093420028d"
 });
 const db = firebase.firestore();
+const storage = firebase.storage();
 const stateRef = db.collection('hub').doc('state');
 
 // Load from localStorage first (instant display)
@@ -477,7 +479,7 @@ function renderDashboard(el) {
       <div class="dash-card" onclick="switchTab('chat')">
         <div class="dc-icon">💬</div>
         <div class="dc-label">Chat</div>
-        <div class="dc-value" style="font-size:14px">${lastMsg?esc(lastMsg.text||'📷 Foto').slice(0,30):'Sem mensagens'}</div>
+        <div class="dc-value" style="font-size:14px">${lastMsg?esc(lastMsg.text||(lastMsg.media&&lastMsg.media.length?'📎 Media':'📷 Foto')).slice(0,30):'Sem mensagens'}</div>
         <div class="dc-sub">${lastMsg?(esc(lastMsg.user)+' · '+lastMsg.time):''}</div>
       </div>
       <div class="dash-card" onclick="switchTab('calendar')">
@@ -821,8 +823,12 @@ function renderChat(el) {
                 ontouchstart="chatLongPress(event,this,'${m.id}')" ontouchend="chatLongPressEnd()" ontouchmove="chatLongPressEnd()"
                 oncontextmenu="event.preventDefault()">
                 <div class="chat-user">${esc(m.user)}</div>
+                ${(m.media&&m.media.length)?m.media.map(u=>{
+                  if(u.match(/\.mp4|\.mov|\.webm/i)) return `<video src="${esc(u)}" controls playsinline style="max-width:100%;border-radius:8px;margin:4px 0"></video>`;
+                  return `<img src="${esc(u)}" style="max-width:100%;border-radius:8px;margin:4px 0" onclick="window.open(this.src,'_blank')" onerror="this.style.display='none'">`;
+                }).join(''):''}
                 ${m.photo?`<img src="${esc(m.photo)}" style="max-width:100%;border-radius:8px;margin:4px 0" onerror="this.style.display='none'">`:''}
-                <div class="chat-text">${esc(m.text)}</div>
+                ${m.text?`<div class="chat-text">${esc(m.text)}</div>`:''}
                 <div class="chat-time">${m.time}</div>
                 ${(m.reactions&&Object.keys(m.reactions).length)?`<div class="chat-reactions">${Object.entries(m.reactions).map(([emoji,users])=>`<span class="reaction ${users.includes(chatUser)?'mine':''}" onclick="toggleReaction('${m.id}','${emoji}')">${emoji}<span class="r-count">${users.length}</span></span>`).join('')}</div>`:''}
               </div>
@@ -832,9 +838,9 @@ function renderChat(el) {
       </div>
       <div id="chat-photo-preview" style="padding:0 0 8px"></div>
       <div class="chat-input-bar">
-        <label style="cursor:pointer;font-size:18px;padding:4px"><input type="file" accept="image/*" id="chat-photo-input" onchange="previewChatPhoto(this)" style="display:none">📷</label>
+        <label style="cursor:pointer;font-size:18px;padding:4px"><input type="file" accept="image/*,video/*" multiple id="chat-media-input" onchange="previewChatMedia(this)" style="display:none">📎</label>
         <input class="input" id="chat-input" placeholder="Escreve uma mensagem..." onkeydown="if(event.key==='Enter')sendChat()" style="flex:1">
-        <button class="btn btn-primary" onclick="sendChat()">Enviar</button>
+        <button class="btn btn-primary" id="chat-send-btn" onclick="sendChat()">Enviar</button>
       </div>
     </div>
   `;
@@ -898,36 +904,51 @@ function toggleReaction(id,emoji){
   save(); render();
 }
 
-let chatPhotoData='';
-function compressImage(file, maxW, quality, cb) {
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const img = new Image();
-    img.onload = function() {
-      const canvas = document.createElement('canvas');
-      let w = img.width, h = img.height;
-      if(w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      cb(canvas.toDataURL('image/jpeg', quality));
-    };
-    img.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
+let chatMediaFiles=[];
+function previewChatMedia(input){
+  const files=Array.from(input.files); if(!files.length) return;
+  files.forEach(f=>chatMediaFiles.push(f));
+  renderMediaPreviews();
+  input.value='';
 }
-function previewChatPhoto(input){
-  const file=input.files[0]; if(!file) return;
-  compressImage(file, 1200, 0.85, function(data){
-    chatPhotoData=data;
-    const prev=$('#chat-photo-preview');
-    if(prev) prev.innerHTML=`<div style="position:relative;display:inline-block"><img src="${chatPhotoData}" style="max-height:100px;border-radius:8px"><button onclick="chatPhotoData='';this.parentElement.remove()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer">✕</button></div>`;
-  });
+function renderMediaPreviews(){
+  const prev=$('#chat-photo-preview');
+  if(!prev) return;
+  prev.innerHTML=chatMediaFiles.map((f,i)=>{
+    const isVideo=f.type.startsWith('video');
+    const url=URL.createObjectURL(f);
+    return `<div style="position:relative;display:inline-block;margin:0 6px 6px 0">`
+      +(isVideo?`<video src="${url}" style="max-height:80px;border-radius:8px"></video>`
+               :`<img src="${url}" style="max-height:80px;border-radius:8px">`)
+      +`<button onclick="removeChatMedia(${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer">✕</button></div>`;
+  }).join('');
 }
-function sendChat() {
+function removeChatMedia(i){ chatMediaFiles.splice(i,1); renderMediaPreviews(); }
+
+async function uploadMedia(file){
+  const ext=file.name.split('.').pop()||'bin';
+  const path='chat/'+Date.now()+'_'+Math.random().toString(36).slice(2,6)+'.'+ext;
+  const ref=storage.ref(path);
+  await ref.put(file);
+  return await ref.getDownloadURL();
+}
+
+async function sendChat() {
   const inp=$('#chat-input'); const t=inp.value.trim();
-  if(!t && !chatPhotoData) return;
-  const msg={ id:uid(), user:chatUser, text:t, time:nowTime(), date:now() };
-  if(chatPhotoData){ msg.photo=chatPhotoData; chatPhotoData=''; }
+  if(!t && !chatMediaFiles.length) return;
+  const msg={ id:uid(), user:chatUser, text:t, time:nowTime(), date:now(), media:[] };
+
+  if(chatMediaFiles.length){
+    const sendBtn=$('#chat-send-btn');
+    if(sendBtn){ sendBtn.disabled=true; sendBtn.textContent='A enviar...'; }
+    try {
+      const urls=await Promise.all(chatMediaFiles.map(f=>uploadMedia(f)));
+      msg.media=urls;
+    } catch(e){ console.warn('Upload error:',e); alert('Erro ao enviar ficheiro(s). Tenta novamente.'); if(sendBtn){sendBtn.disabled=false;sendBtn.textContent='Enviar';} return; }
+    chatMediaFiles=[];
+    if(sendBtn){ sendBtn.disabled=false; sendBtn.textContent='Enviar'; }
+  }
+
   state.chat.push(msg);
   save(); render();
 }
