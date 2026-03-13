@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773402328';
+var APP_V='t1773423782';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -99,17 +99,22 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 .tag-green { background: rgba(106,191,123,0.1); color: var(--green); }
 
 /* ===== DASHBOARD ===== */
+.dash-header { margin-bottom: 28px; }
 .dash-greeting { font-family: var(--font-display); font-size: 28px; color: var(--gold); font-weight: 400; letter-spacing: 1px; margin-bottom: 2px; }
-.dash-date { font-size: 11px; color: var(--dim); letter-spacing: 1px; margin-bottom: 28px; }
-.dash-section-title { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
-.dash-row { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
-.dash-row:last-child { border-bottom: none; }
-.dash-row .dr-icon { font-size: 20px; width: 28px; text-align: center; flex-shrink: 0; }
-.dash-row .dr-body { flex: 1; min-width: 0; }
-.dash-row .dr-label { font-size: 13px; color: var(--text); }
-.dash-row .dr-sub { font-size: 11px; color: var(--dim); margin-top: 1px; }
-.dash-row .dr-badge { font-family: var(--font-display); font-size: 18px; color: var(--gold); flex-shrink: 0; }
-.dash-block { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 4px 16px; margin-bottom: 16px; }
+.dash-date { font-size: 11px; color: var(--dim); letter-spacing: 1px; }
+.dash-summary { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 20px; }
+.dash-summary-title { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px; }
+.dash-items { display: flex; flex-direction: column; gap: 0; }
+.dash-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(42,34,24,0.6); cursor: pointer; }
+.dash-item:last-child { border-bottom: none; padding-bottom: 0; }
+.dash-item:first-child { padding-top: 0; }
+.dash-item .di-icon { font-size: 18px; width: 24px; text-align: center; flex-shrink: 0; }
+.dash-item .di-content { flex: 1; min-width: 0; }
+.dash-item .di-title { font-size: 12px; color: var(--muted); letter-spacing: 0.5px; margin-bottom: 2px; }
+.dash-item .di-value { font-size: 14px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-item .di-badge { font-family: var(--font-display); font-size: 20px; color: var(--gold); flex-shrink: 0; letter-spacing: 0.5px; }
+.dash-progress { height: 4px; background: var(--border); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+.dash-progress-bar { height: 100%; background: var(--gold); border-radius: 2px; transition: width 0.3s; }
 
 .grid { display: grid; gap: 14px; }
 .grid-cards { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
@@ -513,60 +518,48 @@ function renderDashboard(el) {
   const lastMsgText = lastMsg ? (lastMsg.text || (lastMsg.media&&lastMsg.media.length?'📎 Media':'')) : '';
 
   el.innerHTML = `
-    <div class="dash-greeting">${greet}, ${esc(name.split(' ')[0])}</div>
-    <div class="dash-date">${dateStr}</div>
-    <div id="fcm-status" style="font-size:10px;color:var(--dim);margin-bottom:20px;letter-spacing:0.5px">⏳ A verificar notificações...</div>
-
-    <div class="dash-block">
-      <div class="dash-row" onclick="switchTab('objectives')">
-        <span class="dr-icon">🎯</span>
-        <div class="dr-body">
-          <div class="dr-label">Os meus objetivos</div>
-          <div class="dr-sub">${myTotal===0?'Nenhum definido':myTotal===myDone?'Tudo concluído!':((myTotal-myDone)+' por concluir')}</div>
-        </div>
-        <span class="dr-badge">${myDone}/${myTotal}</span>
-      </div>
-      <div class="dash-row" onclick="switchTab('finances')">
-        <span class="dr-icon">💰</span>
-        <div class="dr-body">
-          <div class="dr-label">Balanço</div>
-          <div class="dr-sub">${state.finances.length} movimento${state.finances.length===1?'':'s'}</div>
-        </div>
-        <span class="dr-badge" style="color:${balance>=0?'var(--green)':'var(--red)'}">${balance>=0?'+':''}${balance.toFixed(2)}€</span>
-      </div>
-      <div class="dash-row" onclick="switchTab('calendar')">
-        <span class="dr-icon">📅</span>
-        <div class="dr-body">
-          <div class="dr-label">${upcoming.length?esc(upcoming[0].title):'Calendário'}</div>
-          <div class="dr-sub">${upcoming.length?upcoming[0].date.split('-').reverse().join('/')+' '+(upcoming[0].time||''):'Sem eventos próximos'}</div>
-        </div>
-      </div>
+    <div class="dash-header">
+      <div class="dash-greeting">${greet}, ${esc(name.split(' ')[0])}</div>
+      <div class="dash-date">${dateStr}</div>
+      <div id="fcm-status" style="font-size:10px;color:var(--dim);margin-top:4px;letter-spacing:0.5px">⏳ A verificar notificações...</div>
     </div>
 
-    <div class="dash-block">
-      <div class="dash-row" onclick="switchTab('chat')">
-        <span class="dr-icon">💬</span>
-        <div class="dr-body">
-          <div class="dr-label">${lastMsg?esc(lastMsgText):'Sem mensagens'}</div>
-          <div class="dr-sub">${lastMsg?(esc(lastMsg.user)+' · '+lastMsg.time):''}</div>
+    <div class="dash-summary">
+      <div class="dash-summary-title">Resumo</div>
+      <div class="dash-items">
+        <div class="dash-item" onclick="switchTab('objectives')">
+          <span class="di-icon">🎯</span>
+          <div class="di-content">
+            <div class="di-title">Objetivos da semana</div>
+            <div class="di-value">${myTotal===0?'Nenhum definido':myTotal===myDone?'Tudo concluído!':((myTotal-myDone)+' por concluir')}</div>
+            ${myTotal>0?`<div class="dash-progress"><div class="dash-progress-bar" style="width:${Math.round(myDone/myTotal*100)}%"></div></div>`:''}
+          </div>
+          <span class="di-badge">${myDone}/${myTotal}</span>
         </div>
-      </div>
-    </div>
-
-    <div class="dash-block">
-      <div class="dash-row" onclick="switchTab('inspiration')">
-        <span class="dr-icon">💡</span>
-        <div class="dr-body"><div class="dr-label">Inspirações</div></div>
-        <span class="dr-badge">${state.inspiration.length}</span>
-      </div>
-      <div class="dash-row" onclick="switchTab('recipes')">
-        <span class="dr-icon">🍫</span>
-        <div class="dr-body"><div class="dr-label">Receitas</div></div>
-        <span class="dr-badge">${state.recipes.length}</span>
-      </div>
-      <div class="dash-row" onclick="switchTab('brand')">
-        <span class="dr-icon">🎨</span>
-        <div class="dr-body"><div class="dr-label">Brand</div></div>
+        <div class="dash-item" onclick="switchTab('finances')">
+          <span class="di-icon">💰</span>
+          <div class="di-content">
+            <div class="di-title">Balanço financeiro</div>
+            <div class="di-value">${state.finances.length} movimento${state.finances.length===1?'':'s'}</div>
+          </div>
+          <span class="di-badge" style="color:${balance>=0?'var(--green)':'var(--red)'}">${balance>=0?'+':''}${balance.toFixed(2)}€</span>
+        </div>
+        <div class="dash-item" onclick="switchTab('calendar')">
+          <span class="di-icon">📅</span>
+          <div class="di-content">
+            <div class="di-title">Próximo evento</div>
+            <div class="di-value">${upcoming.length?esc(upcoming[0].title):'Sem eventos próximos'}</div>
+          </div>
+          ${upcoming.length?`<span style="font-size:11px;color:var(--dim);flex-shrink:0">${upcoming[0].date.split('-').reverse().join('/')}${upcoming[0].time?' '+upcoming[0].time:''}</span>`:''}
+        </div>
+        <div class="dash-item" onclick="switchTab('chat')">
+          <span class="di-icon">💬</span>
+          <div class="di-content">
+            <div class="di-title">Última mensagem${lastMsg?' · '+esc(lastMsg.user):''}</div>
+            <div class="di-value">${lastMsg?esc(lastMsgText):'Sem mensagens'}</div>
+          </div>
+          ${lastMsg?`<span style="font-size:11px;color:var(--dim);flex-shrink:0">${lastMsg.time}</span>`:''}
+        </div>
       </div>
     </div>
   `;
