@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773425087';
+var APP_V='t1773425344';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -147,8 +147,8 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 .tx-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
 /* ===== CHAT ===== */
-.chat-wrap { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.chat-messages { flex: 1; overflow-y: auto; padding-bottom: 12px; }
+.chat-wrap { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+.chat-messages { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 12px; overscroll-behavior: contain; }
 .chat-date { text-align: center; font-size: 10px; color: var(--faint); padding: 12px 0 6px; letter-spacing: 1px; }
 .chat-bubble { max-width: 75%; padding: 10px 14px; border-radius: 12px; margin: 3px 0; }
 .chat-bubble .chat-user { font-size: 10px; color: var(--gold); margin-bottom: 3px; font-weight: 600; }
@@ -982,7 +982,7 @@ function renderChat(el) {
 }
 
 let _chatLP=null;
-function chatLongPress(e,el,id){ e.preventDefault(); _chatLP=setTimeout(()=>{navigator.vibrate&&navigator.vibrate(30);showMsgMenu(el,id);},400); }
+function chatLongPress(e,el,id){ _chatLP=setTimeout(()=>{navigator.vibrate&&navigator.vibrate(30);showMsgMenu(el,id);},400); }
 function chatLongPressEnd(){ clearTimeout(_chatLP); }
 function showMsgMenu(bubble,id){
   document.querySelectorAll('.msg-menu').forEach(m=>m.remove());
