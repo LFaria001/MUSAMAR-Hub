@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773424559';
+var APP_V='t1773425087';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -472,6 +472,12 @@ async function saveMedia(url) {
       window.open(url, '_blank');
     }
   }
+}
+async function saveAllMedia(id) {
+  document.querySelectorAll('.msg-menu').forEach(m=>m.remove());
+  const msg = state.chat.find(m=>m.id===id); if(!msg) return;
+  const urls = msg.media || [];
+  for(const u of urls) { await saveMedia(u); }
 }
 
 function renderNav() {
@@ -952,8 +958,8 @@ function renderChat(el) {
                 <div class="chat-user">${esc(m.user)}</div>
                 ${(m.media&&m.media.length)?m.media.map(u=>{
                   const isVid=u.match(/\.mp4|\.mov|\.webm|\/video\//i);
-                  if(isVid) return `<div style="margin:4px 0"><video src="${esc(u)}" controls playsinline style="max-width:100%;border-radius:8px"></video><div onclick="saveMedia('${esc(u)}')" style="font-size:10px;color:var(--gold);margin-top:4px;cursor:pointer">⬇ Guardar vídeo</div></div>`;
-                  return `<div style="margin:4px 0"><img src="${esc(u)}" style="max-width:100%;border-radius:8px"><div onclick="saveMedia('${esc(u)}')" style="font-size:10px;color:var(--gold);margin-top:4px;cursor:pointer">⬇ Guardar foto</div></div>`;
+                  if(isVid) return `<video src="${esc(u)}" controls playsinline style="max-width:100%;border-radius:8px;margin:4px 0"></video>`;
+                  return `<img src="${esc(u)}" style="max-width:100%;border-radius:8px;margin:4px 0">`;
                 }).join(''):''}
                 ${m.photo?`<div style="margin:4px 0"><img src="${esc(m.photo)}" style="max-width:100%;border-radius:8px"></div>`:''}
                 ${m.text?`<div class="chat-text">${esc(m.text)}</div>`:''}
@@ -984,9 +990,11 @@ function showMsgMenu(bubble,id){
   const isMe=msg.user===chatUser;
   const menu=document.createElement('div');
   menu.className='msg-menu';
+  const hasMedia=(msg.media&&msg.media.length);
   menu.innerHTML=`
     <button onclick="openReactPicker('${id}',this)">Reagir</button>
     <button onclick="copyMessage('${id}')">Copiar</button>
+    ${hasMedia?`<button onclick="saveAllMedia('${id}')">Guardar media</button>`:''}
     ${isMe?`<button onclick="editMessage('${id}')">Editar</button>`:''}
     ${isMe?`<button onclick="delMessage('${id}')" style="color:var(--red,#e74c3c)">Apagar</button>`:''}`;
   document.body.appendChild(menu);
