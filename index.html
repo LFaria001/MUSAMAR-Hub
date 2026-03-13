@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='19';
+var APP_V='20';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -374,13 +374,13 @@ stateRef.onSnapshot(snap => {
 const notifSupported = ('Notification' in window);
 const VAPID_KEY = 'BMenAxJFz8N20T4o8sgrMvfxGdd_ZVu1258FNFgiqaXuhqXKeqyzU9O2KXF8A27smukWG4mdl0OsDnMpBaKS3SU';
 let fcmMessaging = null;
+let fcmSwReg = null;
 
-function initFCM() {
+async function initFCM() {
   try {
     fcmMessaging = firebase.messaging();
-    navigator.serviceWorker.register('/firebase-messaging-sw.js').then(reg => {
-      fcmMessaging.useServiceWorker(reg);
-    }).catch(e => console.warn('SW register error:', e));
+    fcmSwReg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+    console.log('FCM SW registered:', fcmSwReg.scope);
   } catch(e) { console.warn('FCM init error:', e); }
 }
 initFCM();
@@ -388,8 +388,10 @@ initFCM();
 async function saveFCMToken() {
   if(!fcmMessaging || !chatUser) return;
   try {
-    const token = await fcmMessaging.getToken({ vapidKey: VAPID_KEY });
+    if(!fcmSwReg) fcmSwReg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+    const token = await fcmMessaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: fcmSwReg });
     if(token) {
+      console.log('FCM token saved for', chatUser);
       db.collection('fcmTokens').doc(chatUser).set({ token, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
     }
   } catch(e) { console.warn('FCM token error:', e); }
