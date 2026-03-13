@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='20';
+var APP_V='21';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -387,14 +387,23 @@ initFCM();
 
 async function saveFCMToken() {
   if(!fcmMessaging || !chatUser) return;
+  const status = $('#fcm-status');
   try {
     if(!fcmSwReg) fcmSwReg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+    if(status) status.textContent = '⏳ A obter token...';
     const token = await fcmMessaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: fcmSwReg });
     if(token) {
-      console.log('FCM token saved for', chatUser);
       db.collection('fcmTokens').doc(chatUser).set({ token, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      if(status) status.textContent = '✅ Notificações ativas';
+      if(status) status.style.color = 'var(--green)';
+    } else {
+      if(status) status.textContent = '❌ Token vazio';
+      if(status) status.style.color = 'var(--red)';
     }
-  } catch(e) { console.warn('FCM token error:', e); }
+  } catch(e) {
+    console.warn('FCM token error:', e);
+    if(status) { status.textContent = '❌ ' + e.message; status.style.color = 'var(--red)'; }
+  }
 }
 
 function updateNotifBanner() {
@@ -499,6 +508,7 @@ function renderDashboard(el) {
   el.innerHTML = `
     <div class="dash-greeting">${greet}, ${esc(name.split(' ')[0])}</div>
     <div class="dash-date">${dateStr}</div>
+    <div id="fcm-status" style="font-size:10px;color:var(--dim);margin-top:6px;letter-spacing:0.5px">⏳ A verificar notificações...</div>
 
     <div class="dash-grid">
       <div class="dash-card" onclick="switchTab('objectives')">
