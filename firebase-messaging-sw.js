@@ -13,23 +13,28 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage(function(payload) {
-  const title = payload.notification.title || 'Musamar Hub';
+  // Don't show duplicate — FCM auto-shows notification from the 'notification' key
+  // Only handle if data-only message (no notification key)
+  if (payload.notification) return;
+  const title = payload.data.title || 'Musamar Hub';
   const options = {
-    body: payload.notification.body || '',
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    body: payload.data.body || '',
+    icon: 'icons/icon-192.png',
   };
   self.registration.showNotification(title, options);
 });
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
+  const appUrl = self.registration.scope;
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-      if (clientList.length > 0) {
-        return clientList[0].focus();
+      for (var i = 0; i < clientList.length; i++) {
+        if (clientList[i].url.indexOf('MUSAMAR-Hub') !== -1) {
+          return clientList[i].focus();
+        }
       }
-      return clients.openWindow('/');
+      return clients.openWindow(appUrl);
     })
   );
 });

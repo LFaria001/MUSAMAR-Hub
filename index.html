@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773424213';
+var APP_V='t1773424413';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -366,11 +366,7 @@ stateRef.onSnapshot(snap => {
   state.calendar = data.calendar || [];
   saveLocal();
   render();
-  if(!initialLoad && data.chat && data.chat.length > prevChatLen && data.lastEditor !== chatUser) {
-    const lastMsg = data.chat[data.chat.length - 1];
-    const body = lastMsg.text || (lastMsg.media&&lastMsg.media.length ? '📎 Enviou media' : '');
-    showNotification(lastMsg.user, body);
-  }
+  // Chat notification handled by FCM push — no inline notification needed
   initialLoad = false;
 }, err => console.warn('Firestore listen error:', err));
 
