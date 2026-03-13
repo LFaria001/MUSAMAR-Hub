@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='13';
+var APP_V='14';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -917,7 +917,7 @@ function compressImage(file, maxW, quality, cb) {
 }
 function previewChatPhoto(input){
   const file=input.files[0]; if(!file) return;
-  compressImage(file, 800, 0.6, function(data){
+  compressImage(file, 1200, 0.85, function(data){
     chatPhotoData=data;
     const prev=$('#chat-photo-preview');
     if(prev) prev.innerHTML=`<div style="position:relative;display:inline-block"><img src="${chatPhotoData}" style="max-height:100px;border-radius:8px"><button onclick="chatPhotoData='';this.parentElement.remove()" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer">✕</button></div>`;
