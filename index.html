@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='23';
+var APP_V='24';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -505,6 +505,10 @@ function renderDashboard(el) {
   const totalOut = state.finances.filter(f=>f.type==='saida').reduce((s,f)=>s+(parseFloat(f.amount)||0),0);
   const balance = totalIn - totalOut;
 
+  // Upcoming events
+  const today = d.toISOString().slice(0,10);
+  const upcoming = (state.calendar||[]).filter(ev=>ev.date>=today).sort((a,b)=>a.date.localeCompare(b.date)||((a.time||'').localeCompare(b.time||'')));
+
   // Last chat
   const lastMsg = state.chat.length ? state.chat[state.chat.length-1] : null;
   const lastMsgText = lastMsg ? (lastMsg.text || (lastMsg.media&&lastMsg.media.length?'📎 Media':'')) : '';
@@ -532,6 +536,12 @@ function renderDashboard(el) {
         <div class="dc-label">Chat</div>
         <div class="dc-value" style="font-size:13px">${lastMsg?esc(lastMsgText):'Sem mensagens'}</div>
         <div class="dc-sub">${lastMsg?(esc(lastMsg.user)+' · '+lastMsg.time):''}</div>
+      </div>
+      <div class="dash-card" onclick="switchTab('calendar')">
+        <div class="dc-icon">📅</div>
+        <div class="dc-label">Próximo evento</div>
+        <div class="dc-value" style="font-size:13px">${upcoming.length?esc(upcoming[0].title):'Nenhum'}</div>
+        <div class="dc-sub">${upcoming.length?upcoming[0].date.split('-').reverse().join('/')+' '+(upcoming[0].time||''):''}</div>
       </div>
       <div class="dash-card" onclick="switchTab('inspiration')">
         <div class="dc-icon">💡</div>
