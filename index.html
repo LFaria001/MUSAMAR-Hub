@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='22';
+var APP_V='23';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -490,20 +490,24 @@ function renderDashboard(el) {
   // Objectives stats
   const g1 = state.objectives.member1.goals;
   const g2 = state.objectives.member2.goals;
-  const totalGoals = g1.length + g2.length;
-  const doneGoals = g1.filter(g=>g.done).length + g2.filter(g=>g.done).length;
+  // My goals (current user + ambos)
+  const myKey = chatUser === state.objectives.member1.name ? 'member1' : 'member2';
+  const myGoals = state.objectives[myKey].goals;
+  const ambosGoals = myKey === 'member1'
+    ? state.objectives.member2.goals.filter(g => !g.assignee && myGoals.some(mg => mg.text === g.text))
+    : state.objectives.member1.goals.filter(g => !g.assignee && myGoals.some(mg => mg.text === g.text));
+  const allMyGoals = myGoals;
+  const myTotal = allMyGoals.length;
+  const myDone = allMyGoals.filter(g=>g.done).length;
 
   // Finances
   const totalIn = state.finances.filter(f=>f.type==='entrada').reduce((s,f)=>s+(parseFloat(f.amount)||0),0);
   const totalOut = state.finances.filter(f=>f.type==='saida').reduce((s,f)=>s+(parseFloat(f.amount)||0),0);
   const balance = totalIn - totalOut;
 
-  // Upcoming events
-  const today = d.toISOString().slice(0,10);
-  const upcoming = (state.calendar||[]).filter(ev=>ev.date>=today).sort((a,b)=>a.date.localeCompare(b.date)||((a.time||'').localeCompare(b.time||'')));
-
   // Last chat
   const lastMsg = state.chat.length ? state.chat[state.chat.length-1] : null;
+  const lastMsgText = lastMsg ? (lastMsg.text || (lastMsg.media&&lastMsg.media.length?'📎 Media':'')) : '';
 
   el.innerHTML = `
     <div class="dash-greeting">${greet}, ${esc(name.split(' ')[0])}</div>
@@ -513,9 +517,9 @@ function renderDashboard(el) {
     <div class="dash-grid">
       <div class="dash-card" onclick="switchTab('objectives')">
         <div class="dc-icon">🎯</div>
-        <div class="dc-label">Objetivos da semana</div>
-        <div class="dc-value">${doneGoals}/${totalGoals}</div>
-        <div class="dc-sub">${totalGoals===0?'Nenhum definido':totalGoals===doneGoals?'Tudo concluído!':((totalGoals-doneGoals)+' por concluir')}</div>
+        <div class="dc-label">Os meus objetivos</div>
+        <div class="dc-value">${myDone}/${myTotal}</div>
+        <div class="dc-sub">${myTotal===0?'Nenhum definido':myTotal===myDone?'Tudo concluído!':((myTotal-myDone)+' por concluir')}</div>
       </div>
       <div class="dash-card" onclick="switchTab('finances')">
         <div class="dc-icon">💰</div>
@@ -523,17 +527,11 @@ function renderDashboard(el) {
         <div class="dc-value" style="color:${balance>=0?'var(--green)':'var(--red)'}">${balance>=0?'+':''}${balance.toFixed(2)}€</div>
         <div class="dc-sub">${state.finances.length} movimento${state.finances.length===1?'':'s'}</div>
       </div>
-      <div class="dash-card" onclick="switchTab('chat')">
+      <div class="dash-card dash-wide" onclick="switchTab('chat')">
         <div class="dc-icon">💬</div>
         <div class="dc-label">Chat</div>
-        <div class="dc-value" style="font-size:14px">${lastMsg?esc(lastMsg.text||(lastMsg.media&&lastMsg.media.length?'📎 Media':'📷 Foto')).slice(0,30):'Sem mensagens'}</div>
+        <div class="dc-value" style="font-size:13px">${lastMsg?esc(lastMsgText):'Sem mensagens'}</div>
         <div class="dc-sub">${lastMsg?(esc(lastMsg.user)+' · '+lastMsg.time):''}</div>
-      </div>
-      <div class="dash-card" onclick="switchTab('calendar')">
-        <div class="dc-icon">📅</div>
-        <div class="dc-label">Próximo evento</div>
-        <div class="dc-value" style="font-size:14px">${upcoming.length?esc(upcoming[0].title).slice(0,25):'Nenhum'}</div>
-        <div class="dc-sub">${upcoming.length?upcoming[0].date.split('-').reverse().join('/')+' '+(upcoming[0].time||''):''}</div>
       </div>
       <div class="dash-card" onclick="switchTab('inspiration')">
         <div class="dc-icon">💡</div>
@@ -546,20 +544,6 @@ function renderDashboard(el) {
         <div class="dc-value">${state.recipes.length}</div>
       </div>
     </div>
-
-    ${upcoming.length?`
-    <div class="dash-section">
-      <div class="dash-section-title">Próximos eventos</div>
-      ${upcoming.slice(0,3).map(ev=>`
-        <div class="card" style="margin-bottom:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="switchTab('calendar')">
-          <span style="font-size:20px">📅</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;color:var(--text)">${esc(ev.title)}</div>
-            <div style="font-size:11px;color:var(--dim)">${ev.date.split('-').reverse().join('/')} ${ev.time||''}</div>
-          </div>
-        </div>
-      `).join('')}
-    </div>`:''}
   `;
   // Trigger FCM check after render
   setTimeout(()=>checkFCMStatus(), 500);
