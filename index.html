@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773424413';
+var APP_V='t1773424559';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -448,14 +448,30 @@ function openModal(title, content) {
 function closeModal() { $('#modal-overlay').classList.remove('open'); }
 $('#modal-overlay').addEventListener('click', e => { if(e.target.id==='modal-overlay') closeModal(); });
 
-function openMediaViewer(src) {
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px';
-  overlay.innerHTML = `<img src="${src}" style="max-width:100%;max-height:80vh;border-radius:8px;-webkit-user-select:none">
-    <p style="color:var(--muted);font-size:12px;margin-top:16px;text-align:center">Toque longo na imagem para guardar</p>
-    <button onclick="this.parentElement.remove()" style="margin-top:12px;padding:10px 24px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--gold);font-size:13px;cursor:pointer">Fechar</button>`;
-  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
-  document.body.appendChild(overlay);
+async function saveMedia(url) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const ext = blob.type.includes('png') ? '.png' : blob.type.includes('gif') ? '.gif' : '.jpg';
+    const file = new File([blob], 'musamar' + Date.now() + ext, { type: blob.type });
+
+    if(navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+      return;
+    }
+
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  } catch(e) {
+    if(e.name !== 'AbortError') {
+      window.open(url, '_blank');
+    }
+  }
 }
 
 function renderNav() {
@@ -936,8 +952,8 @@ function renderChat(el) {
                 <div class="chat-user">${esc(m.user)}</div>
                 ${(m.media&&m.media.length)?m.media.map(u=>{
                   const isVid=u.match(/\.mp4|\.mov|\.webm|\/video\//i);
-                  if(isVid) return `<div style="margin:4px 0"><video src="${esc(u)}" controls playsinline style="max-width:100%;border-radius:8px"></video><a href="${esc(u)}" target="_blank" rel="noopener" style="display:inline-block;font-size:10px;color:var(--gold);margin-top:4px;text-decoration:none">⬇ Abrir vídeo</a></div>`;
-                  return `<div style="margin:4px 0"><img src="${esc(u)}" style="max-width:100%;border-radius:8px" onclick="openMediaViewer(this.src)"><div onclick="openMediaViewer('${esc(u)}')" style="font-size:10px;color:var(--gold);margin-top:4px;cursor:pointer">⬇ Guardar foto</div></div>`;
+                  if(isVid) return `<div style="margin:4px 0"><video src="${esc(u)}" controls playsinline style="max-width:100%;border-radius:8px"></video><div onclick="saveMedia('${esc(u)}')" style="font-size:10px;color:var(--gold);margin-top:4px;cursor:pointer">⬇ Guardar vídeo</div></div>`;
+                  return `<div style="margin:4px 0"><img src="${esc(u)}" style="max-width:100%;border-radius:8px"><div onclick="saveMedia('${esc(u)}')" style="font-size:10px;color:var(--gold);margin-top:4px;cursor:pointer">⬇ Guardar foto</div></div>`;
                 }).join(''):''}
                 ${m.photo?`<div style="margin:4px 0"><img src="${esc(m.photo)}" style="max-width:100%;border-radius:8px"></div>`:''}
                 ${m.text?`<div class="chat-text">${esc(m.text)}</div>`:''}
