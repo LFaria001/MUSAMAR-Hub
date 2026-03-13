@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='17';
+var APP_V='18';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -205,6 +205,7 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 </head>
 <body>
 
@@ -369,8 +370,31 @@ stateRef.onSnapshot(snap => {
   initialLoad = false;
 }, err => console.warn('Firestore listen error:', err));
 
-// ===== NOTIFICATIONS =====
+// ===== NOTIFICATIONS + FCM =====
 const notifSupported = ('Notification' in window);
+const VAPID_KEY = 'kRPAmlcQ47zzpoTTrLWTwn6sUnccnNARIzfuFCzc3eI';
+let fcmMessaging = null;
+
+function initFCM() {
+  try {
+    fcmMessaging = firebase.messaging();
+    navigator.serviceWorker.register('/firebase-messaging-sw.js').then(reg => {
+      fcmMessaging.useServiceWorker(reg);
+    }).catch(e => console.warn('SW register error:', e));
+  } catch(e) { console.warn('FCM init error:', e); }
+}
+initFCM();
+
+async function saveFCMToken() {
+  if(!fcmMessaging || !chatUser) return;
+  try {
+    const token = await fcmMessaging.getToken({ vapidKey: VAPID_KEY });
+    if(token) {
+      db.collection('fcmTokens').doc(chatUser).set({ token, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    }
+  } catch(e) { console.warn('FCM token error:', e); }
+}
+
 function updateNotifBanner() {
   const b = document.getElementById('notif-banner');
   if(!b) return;
@@ -385,13 +409,14 @@ function enableNotifications() {
   Notification.requestPermission().then(p => {
     updateNotifBanner();
     if(p === 'granted') {
-      // Send a test notification to confirm it works
       showNotification('Musamar Hub', 'Notificações ativadas!');
+      saveFCMToken();
     }
   });
 }
 function requestNotifications() {
   updateNotifBanner();
+  if(Notification.permission === 'granted') saveFCMToken();
 }
 function showNotification(user, body) {
   if(!notifSupported || Notification.permission !== 'granted') return;
@@ -806,6 +831,7 @@ function pickIdentity(name) {
   chatUser = name;
   document.getElementById('identity-screen').style.display = 'none';
   requestNotifications();
+  saveFCMToken();
 }
 
 // Show identity screen if not set
