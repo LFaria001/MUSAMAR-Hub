@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='15';
+var APP_V='16';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -205,7 +205,6 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 </head>
 <body>
 
@@ -306,8 +305,9 @@ firebase.initializeApp({
   appId: "1:429342019448:web:3342971f2f08093420028d"
 });
 const db = firebase.firestore();
-const storage = firebase.storage();
 const stateRef = db.collection('hub').doc('state');
+const CLOUDINARY_CLOUD = 'di4ee9gm1';
+const CLOUDINARY_UPLOAD_URL = 'https://api.cloudinary.com/v1_1/di4ee9gm1/auto/upload';
 
 // Load from localStorage first (instant display)
 function loadLocal() { try { const d = localStorage.getItem('musamar-hub'); if(d) { const p = JSON.parse(d); Object.assign(state, p); } } catch(e){} }
@@ -926,11 +926,14 @@ function renderMediaPreviews(){
 function removeChatMedia(i){ chatMediaFiles.splice(i,1); renderMediaPreviews(); }
 
 async function uploadMedia(file){
-  const ext=file.name.split('.').pop()||'bin';
-  const path='chat/'+Date.now()+'_'+Math.random().toString(36).slice(2,6)+'.'+ext;
-  const ref=storage.ref(path);
-  await ref.put(file);
-  return await ref.getDownloadURL();
+  const fd=new FormData();
+  fd.append('file', file);
+  fd.append('upload_preset', 'musamar_chat');
+  fd.append('folder', 'chat');
+  const res=await fetch(CLOUDINARY_UPLOAD_URL, {method:'POST', body:fd});
+  if(!res.ok) throw new Error('Upload failed: '+res.status);
+  const data=await res.json();
+  return data.secure_url;
 }
 
 async function sendChat() {
