@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='21';
+var APP_V='22';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -561,6 +561,32 @@ function renderDashboard(el) {
       `).join('')}
     </div>`:''}
   `;
+  // Trigger FCM check after render
+  setTimeout(()=>checkFCMStatus(), 500);
+}
+
+async function checkFCMStatus() {
+  const status = $('#fcm-status');
+  if(!status) return;
+  const perm = typeof Notification !== 'undefined' ? Notification.permission : 'unsupported';
+  if(perm === 'granted') {
+    await saveFCMToken();
+  } else if(perm === 'denied') {
+    status.textContent = '❌ Notificações bloqueadas nas definições';
+    status.style.color = 'var(--red)';
+  } else if(perm === 'default') {
+    status.textContent = '🔔 Toca para ativar notificações';
+    status.style.color = 'var(--gold)';
+    status.style.cursor = 'pointer';
+    status.onclick = async () => {
+      const p = await Notification.requestPermission();
+      if(p === 'granted') { await saveFCMToken(); }
+      else { status.textContent = '❌ Permissão recusada'; status.style.color = 'var(--red)'; }
+    };
+  } else {
+    status.textContent = '❌ Notificações não suportadas';
+    status.style.color = 'var(--red)';
+  }
 }
 
 // ===== 1. INSPIRAÇÃO =====
