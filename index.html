@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773423782';
+var APP_V='t1773424071';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -482,6 +482,36 @@ function render() {
 }
 
 // ===== 0. DASHBOARD =====
+function dashFinChart(finances) {
+  const year = new Date().getFullYear();
+  const months = Array(12).fill(0);
+  finances.forEach(f => {
+    if(!f.date) return;
+    const d = new Date(f.date);
+    if(d.getFullYear() !== year) return;
+    const m = d.getMonth();
+    const v = parseFloat(f.amount) || 0;
+    months[m] += f.type === 'entrada' ? v : -v;
+  });
+  // Cumulative balance per month
+  const cum = [];
+  let running = 0;
+  for(let i = 0; i < 12; i++) { running += months[i]; cum.push(running); }
+  const max = Math.max(...cum.map(Math.abs), 1);
+  const w = 100, h = 32, pad = 2;
+  const points = cum.map((v, i) => {
+    const x = pad + (i / 11) * (w - pad * 2);
+    const y = pad + ((max - v) / (max * 2)) * (h - pad * 2);
+    return x + ',' + y;
+  }).join(' ');
+  const lastV = cum[new Date().getMonth()];
+  const color = lastV >= 0 ? 'var(--green)' : 'var(--red)';
+  return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" style="flex-shrink:0">'
+    + '<line x1="'+pad+'" y1="'+h/2+'" x2="'+(w-pad)+'" y2="'+h/2+'" stroke="var(--border)" stroke-width="0.5"/>'
+    + '<polyline points="'+points+'" fill="none" stroke="'+color+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
+    + '</svg>';
+}
+
 function renderDashboard(el) {
   const d = new Date();
   const diasSemana = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
@@ -540,9 +570,8 @@ function renderDashboard(el) {
           <span class="di-icon">💰</span>
           <div class="di-content">
             <div class="di-title">Balanço financeiro</div>
-            <div class="di-value">${state.finances.length} movimento${state.finances.length===1?'':'s'}</div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:4px">${dashFinChart(state.finances)}<span class="di-badge" style="color:${balance>=0?'var(--green)':'var(--red)'}"> ${balance>=0?'+':''}${balance.toFixed(2)}€</span></div>
           </div>
-          <span class="di-badge" style="color:${balance>=0?'var(--green)':'var(--red)'}">${balance>=0?'+':''}${balance.toFixed(2)}€</span>
         </div>
         <div class="dash-item" onclick="switchTab('calendar')">
           <span class="di-icon">📅</span>
