@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='16';
+var APP_V='17';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -314,6 +314,15 @@ function loadLocal() { try { const d = localStorage.getItem('musamar-hub'); if(d
 function saveLocal() { try { localStorage.setItem('musamar-hub', JSON.stringify(state)); } catch(e){} }
 loadLocal();
 
+// Migrate: remove old base64 photo data from chat messages (too large for Firestore)
+(function migratePhotos(){
+  let changed=false;
+  state.chat.forEach(m=>{
+    if(m.photo && m.photo.startsWith('data:')){ m.photo=''; changed=true; }
+  });
+  if(changed) saveLocal();
+})();
+
 // Save to Firestore
 function save() {
   saveLocal();
@@ -354,7 +363,8 @@ stateRef.onSnapshot(snap => {
   render();
   if(!initialLoad && data.chat && data.chat.length > prevChatLen && data.lastEditor !== chatUser) {
     const lastMsg = data.chat[data.chat.length - 1];
-    showNotification(lastMsg.user, lastMsg.text);
+    const body = lastMsg.text || (lastMsg.media&&lastMsg.media.length ? '📎 Enviou media' : '');
+    showNotification(lastMsg.user, body);
   }
   initialLoad = false;
 }, err => console.warn('Firestore listen error:', err));
@@ -824,10 +834,11 @@ function renderChat(el) {
                 oncontextmenu="event.preventDefault()">
                 <div class="chat-user">${esc(m.user)}</div>
                 ${(m.media&&m.media.length)?m.media.map(u=>{
-                  if(u.match(/\.mp4|\.mov|\.webm/i)) return `<video src="${esc(u)}" controls playsinline style="max-width:100%;border-radius:8px;margin:4px 0"></video>`;
-                  return `<img src="${esc(u)}" style="max-width:100%;border-radius:8px;margin:4px 0" onclick="window.open(this.src,'_blank')" onerror="this.style.display='none'">`;
+                  const isVid=u.match(/\.mp4|\.mov|\.webm|\/video\//i);
+                  if(isVid) return `<div style="margin:4px 0"><video src="${esc(u)}" controls playsinline style="max-width:100%;border-radius:8px"></video><a href="${esc(u)}" download style="display:inline-block;font-size:10px;color:var(--gold);margin-top:4px;text-decoration:none">⬇ Guardar vídeo</a></div>`;
+                  return `<div style="margin:4px 0"><img src="${esc(u)}" style="max-width:100%;border-radius:8px;cursor:pointer" onclick="window.open(this.src,'_blank')"><a href="${esc(u)}" download style="display:inline-block;font-size:10px;color:var(--gold);margin-top:4px;text-decoration:none">⬇ Guardar foto</a></div>`;
                 }).join(''):''}
-                ${m.photo?`<img src="${esc(m.photo)}" style="max-width:100%;border-radius:8px;margin:4px 0" onerror="this.style.display='none'">`:''}
+                ${m.photo?`<div style="margin:4px 0"><img src="${esc(m.photo)}" style="max-width:100%;border-radius:8px"></div>`:''}
                 ${m.text?`<div class="chat-text">${esc(m.text)}</div>`:''}
                 <div class="chat-time">${m.time}</div>
                 ${(m.reactions&&Object.keys(m.reactions).length)?`<div class="chat-reactions">${Object.entries(m.reactions).map(([emoji,users])=>`<span class="reaction ${users.includes(chatUser)?'mine':''}" onclick="toggleReaction('${m.id}','${emoji}')">${emoji}<span class="r-count">${users.length}</span></span>`).join('')}</div>`:''}
