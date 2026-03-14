@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773500367';
+var APP_V='t1773500538';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -1046,7 +1046,7 @@ function editMessage(id){
   if(newText!==null && newText.trim()){ msg.text=newText.trim(); save(); render(); }
 }
 function delMessage(id){ state.chat=state.chat.filter(m=>m.id!==id); save(); render(); }
-function clearChat(){ if(!confirm('Apagar todas as mensagens do chat?')) return; state.chat=[]; save(); render(); }
+function clearChat(){ const r=prompt('Qual é o número favorito da Mariah?'); if(!r||r.trim()!=='2'){ if(r!==null) alert('Resposta errada!'); return; } state.chat=[]; save(); render(); }
 function openReactPicker(id){
   document.querySelectorAll('.msg-menu,.react-picker').forEach(m=>m.remove());
   const emojis=['❤️','😂','👍','🔥','😍','👏'];
