@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773425344';
+var APP_V='t1773500367';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -495,6 +495,33 @@ function closeTabMenu() { $('#tab-menu-overlay').classList.remove('open'); }
 
 function switchTab(id) { activeTab=id; renderNav(); render(); requestNotifications(); }
 
+// ===== SHARE TARGET =====
+(function handleShareTarget(){
+  const params = new URLSearchParams(location.search);
+  const shTitle = params.get('share_title') || '';
+  const shText = params.get('share_text') || '';
+  const shUrl = params.get('share_url') || '';
+  if(!shTitle && !shText && !shUrl) return;
+  // Extract URL from text if share_url is empty (some apps put URL in text)
+  let url = shUrl;
+  if(!url && shText) { const m=shText.match(/https?:\/\/\S+/); if(m) url=m[0]; }
+  const title = shTitle || (shText && !url ? shText.substring(0,80) : '') || 'Partilha externa';
+  const notes = shText && shText !== url ? shText : '';
+  // Clean URL so share params don't persist
+  history.replaceState(null, '', location.pathname);
+  // Wait for first render then open modal with shared data
+  setTimeout(()=>{
+    switchTab('inspiration');
+    openModal('Nova Inspiração (Partilha)', `
+      <div class="form-group"><label class="label">Título</label><input class="input" id="f-ins-title" value="${esc(title)}"></div>
+      <div class="form-group"><label class="label">URL</label><input class="input" id="f-ins-url" value="${esc(url)}"></div>
+      <div class="form-group"><label class="label">Categoria</label><div class="chip-group">${CATS.map((c,i)=>`<button class="chip ${i===0?'active':''}" onclick="pickChip(this)" data-val="${c}">${c}</button>`).join('')}</div></div>
+      <div class="form-group"><label class="label">Notas</label><textarea class="input" id="f-ins-notes">${esc(notes)}</textarea></div>
+      <button class="btn btn-primary btn-full" onclick="addInspiration()">Guardar Ideia</button>
+    `);
+  }, 300);
+})();
+
 function render() {
   const m=$('#main');
   switch(activeTab) {
@@ -945,7 +972,7 @@ function renderChat(el) {
 
   el.innerHTML = `
     <div class="chat-wrap">
-      <div class="section-header" style="margin-bottom:16px"><div><h1>Chat</h1><div class="sub">farifari & Mariah Crispy</div></div></div>
+      <div class="section-header" style="margin-bottom:16px"><div><h1>Chat</h1><div class="sub">farifari & Mariah Crispy</div></div><button onclick="clearChat()" style="background:none;border:1px solid var(--red,#e74c3c);color:var(--red,#e74c3c);padding:6px 12px;border-radius:8px;font-size:13px;cursor:pointer">Apagar tudo</button></div>
       <div class="chat-messages" id="chat-messages">
         ${Object.entries(grouped).map(([date,ms])=>`
           <div class="chat-date">${date}</div>
@@ -1019,6 +1046,7 @@ function editMessage(id){
   if(newText!==null && newText.trim()){ msg.text=newText.trim(); save(); render(); }
 }
 function delMessage(id){ state.chat=state.chat.filter(m=>m.id!==id); save(); render(); }
+function clearChat(){ if(!confirm('Apagar todas as mensagens do chat?')) return; state.chat=[]; save(); render(); }
 function openReactPicker(id){
   document.querySelectorAll('.msg-menu,.react-picker').forEach(m=>m.remove());
   const emojis=['❤️','😂','👍','🔥','😍','👏'];
