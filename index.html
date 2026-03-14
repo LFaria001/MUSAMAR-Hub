@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773520946';
+var APP_V='t1773521021';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -1010,6 +1010,9 @@ function renderChat(el) {
     </div>
   `;
   const cm=$('#chat-messages'); cm.scrollTop=cm.scrollHeight;
+  // Re-scroll after media loads
+  cm.querySelectorAll('img,video').forEach(el=>{ el.onload=el.onloadedmetadata=()=>{ cm.scrollTop=cm.scrollHeight; }; });
+  setTimeout(()=>{ cm.scrollTop=cm.scrollHeight; },300);
 }
 
 let _chatLP=null;
