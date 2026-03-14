@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773522397';
+var APP_V='t1773525008';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -332,7 +332,9 @@ const ORDER_STATUSES = ['pendente','pago','em produção','enviado','entregue','
 const PAY_STATUSES = ['pendente','pago','parcial','reembolsado'];
 const INV_CATS = ['Tâmaras','Recheios','Embalagem','Rótulos','Outro'];
 
-const DEFAULT = { inspiration:[], recipes:[], finances:[], brandAssets:[], chat:[], objectives:{ member1:{name:'farifari',goals:[]}, member2:{name:'Mariah Crispy',goals:[]} }, weekLabel:'', weekEnd:'', accountability:[], calendar:[], notes:[], products:[], orders:[], customers:[], inventory:[], feedback:[], orderSeq:0 };
+const PACK_SIZES = [3, 6, 10];
+
+const DEFAULT = { inspiration:[], recipes:[], finances:[], brandAssets:[], chat:[], objectives:{ member1:{name:'farifari',goals:[]}, member2:{name:'Mariah Crispy',goals:[]} }, weekLabel:'', weekEnd:'', accountability:[], calendar:[], notes:[], flavors:[], packs:[], orders:[], customers:[], inventory:[], feedback:[], orderSeq:0 };
 
 let state = JSON.parse(JSON.stringify(DEFAULT));
 let activeTab = 'dashboard';
@@ -380,7 +382,8 @@ function save() {
     accountability: state.accountability || [],
     calendar: state.calendar || [],
     notes: state.notes || [],
-    products: state.products || [],
+    flavors: state.flavors || [],
+    packs: state.packs || [],
     orders: state.orders || [],
     customers: state.customers || [],
     inventory: state.inventory || [],
@@ -409,7 +412,8 @@ stateRef.onSnapshot(snap => {
   state.accountability = data.accountability || [];
   state.calendar = data.calendar || [];
   state.notes = data.notes || [];
-  state.products = data.products || [];
+  state.flavors = data.flavors || [];
+  state.packs = data.packs || [];
   state.orders = data.orders || [];
   state.customers = data.customers || [];
   state.inventory = data.inventory || [];
@@ -594,9 +598,13 @@ function render() {
 }
 
 // ===== BUSINESS HELPERS =====
-function productTotalCost(p) { return (parseFloat(p.dateCost)||0)+(parseFloat(p.fillingCost)||0)+(parseFloat(p.packagingCost)||0)+(parseFloat(p.laborCost)||0)+(parseFloat(p.shippingCost)||0); }
-function productProfit(p) { return (parseFloat(p.salePrice)||0)-productTotalCost(p); }
-function productMargin(p) { const sp=parseFloat(p.salePrice)||0; return sp>0?((productProfit(p)/sp)*100):0; }
+function flavorUnitCost(f) { return (parseFloat(f.dateCost)||0)+(parseFloat(f.fillingCost)||0); }
+function packTotalCost(pack, flavor) {
+  const unitCost=flavorUnitCost(flavor);
+  return unitCost*(parseFloat(pack.size)||0)+(parseFloat(pack.packagingCost)||0)+(parseFloat(pack.laborCost)||0)+(parseFloat(pack.shippingCost)||0);
+}
+function packProfit(pack, flavor) { return (parseFloat(pack.salePrice)||0)-packTotalCost(pack,flavor); }
+function packMargin(pack, flavor) { const sp=parseFloat(pack.salePrice)||0; return sp>0?(packProfit(pack,flavor)/sp*100):0; }
 function orderRevenue(o) { return (o.items||[]).reduce((s,i)=>(s+(parseFloat(i.qty)||0)*(parseFloat(i.unitPrice)||0)),0); }
 function orderCost(o) { return (o.items||[]).reduce((s,i)=>(s+(parseFloat(i.qty)||0)*(parseFloat(i.unitCost)||0)),0); }
 function orderProfit(o) { return orderRevenue(o)-orderCost(o); }
@@ -768,75 +776,111 @@ async function checkFCMStatus() {
   }
 }
 
-// ===== PRODUCTS =====
+// ===== PRODUCTS (Sabores + Packs) =====
 function renderProducts(el) {
-  const prods=state.products||[];
+  const flavors=state.flavors||[];
+  const packs=state.packs||[];
+  // Find most expensive flavor for reference
+  const maxUnitCost=flavors.length?Math.max(...flavors.map(f=>flavorUnitCost(f))):0;
+
   el.innerHTML=`
     <div class="section-header">
-      <div><h1>Produtos</h1><div class="sub">${prods.length} produtos registados</div></div>
-      <button class="btn btn-primary" onclick="openProductModal()">+ Novo Produto</button>
+      <div><h1>Produtos</h1><div class="sub">${flavors.length} sabores · ${packs.length} packs</div></div>
+      <div style="display:flex;gap:8px"><button class="btn btn-ghost" onclick="openFlavorModal()">+ Sabor</button><button class="btn btn-primary" onclick="openPackModal()">+ Pack</button></div>
     </div>
-    ${prods.length?`<div class="card" style="padding:0;overflow-x:auto"><table class="data-table">
-      <thead><tr><th>Produto</th><th>SKU</th><th>Preço</th><th>Custo</th><th>Lucro</th><th>Margem</th></tr></thead>
-      <tbody>${prods.map(p=>{
-        const tc=productTotalCost(p), pr=productProfit(p), mg=productMargin(p);
-        return `<tr onclick="openProductModal('${p.id}')">
-          <td><div style="font-weight:500">${esc(p.name)}</div><div style="font-size:10px;color:var(--dim)">${esc(p.dateType||'')} · ${esc(p.filling||'')} · ${esc(p.boxSize||'')}</div></td>
-          <td style="color:var(--muted)">${esc(p.sku||'—')}</td>
-          <td>${fmt(p.salePrice)}</td>
-          <td style="color:var(--muted)">${fmt(tc)}</td>
-          <td style="color:${pr>=0?'var(--green)':'var(--red)'}">${fmt(pr)}</td>
-          <td><span class="badge ${mg>=30?'badge-ok':'badge-low'}">${mg.toFixed(0)}%</span></td>
+
+    ${packs.length?`<div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;font-weight:600">Packs</div>
+    <div class="card" style="padding:0;overflow-x:auto;margin-bottom:24px"><table class="data-table">
+      <thead><tr><th>Pack</th><th>Preço</th><th>Embalagem</th><th>Mão obra</th><th>Envio</th></tr></thead>
+      <tbody>${packs.map(p=>`<tr onclick="openPackModal('${p.id}')" style="cursor:pointer">
+        <td style="font-weight:600;color:var(--gold)">Pack ${p.size}</td>
+        <td>${fmt(p.salePrice)}</td>
+        <td style="color:var(--muted)">${fmt(p.packagingCost)}</td>
+        <td style="color:var(--muted)">${fmt(p.laborCost)}</td>
+        <td style="color:var(--muted)">${fmt(p.shippingCost)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`:''}
+
+    ${flavors.length?`<div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;font-weight:600">Sabores</div>
+    <div class="card" style="padding:0;overflow-x:auto;margin-bottom:24px"><table class="data-table">
+      <thead><tr><th>Sabor</th><th>Custo tâmara</th><th>Custo recheio</th><th>Custo unitário</th></tr></thead>
+      <tbody>${flavors.map(f=>{
+        const uc=flavorUnitCost(f);
+        return `<tr onclick="openFlavorModal('${f.id}')" style="cursor:pointer">
+          <td style="font-weight:500">${esc(f.name)}</td>
+          <td style="color:var(--muted)">${fmt(f.dateCost)}</td>
+          <td style="color:var(--muted)">${fmt(f.fillingCost)}</td>
+          <td>${fmt(uc)}</td>
         </tr>`;
       }).join('')}</tbody>
-    </table></div>`:'<div class="empty"><div class="icon">🍫</div><p>Sem produtos. Adiciona o primeiro!</p></div>'}`;
+    </table></div>`:''}
+
+    ${flavors.length&&packs.length?`<div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;font-weight:600">Matriz Lucro (Sabor × Pack)</div>
+    <div class="card" style="padding:0;overflow-x:auto"><table class="data-table">
+      <thead><tr><th>Sabor</th>${packs.map(p=>`<th colspan="2">Pack ${p.size} (${fmt(p.salePrice)})</th>`).join('')}</tr>
+      <tr><th></th>${packs.map(()=>'<th style="font-size:9px">Custo</th><th style="font-size:9px">Lucro</th>').join('')}</tr></thead>
+      <tbody>${flavors.map(f=>`<tr>
+        <td style="font-weight:500">${esc(f.name)}</td>
+        ${packs.map(p=>{
+          const cost=packTotalCost(p,f), profit=packProfit(p,f), margin=packMargin(p,f);
+          return `<td style="color:var(--muted)">${fmt(cost)}</td><td style="color:${profit>=0?'var(--green)':'var(--red)'}"><div>${fmt(profit)}</div><div style="font-size:9px;opacity:0.7">${margin.toFixed(0)}%</div></td>`;
+        }).join('')}
+      </tr>`).join('')}</tbody>
+    </table></div>`:'<div class="empty"><div class="icon">🍫</div><p>Adiciona sabores e packs para ver a matriz de lucro.</p></div>'}`;
 }
 
-function openProductModal(editId) {
-  const p=editId?(state.products||[]).find(x=>x.id===editId):null;
-  const title=p?'Editar Produto':'Novo Produto';
-  openModal(title, `
-    <div class="form-group"><label class="label">Nome do Produto</label><input class="input" id="f-prod-name" value="${esc(p?p.name:'')}" placeholder="Ex: Caixa 6 Medjool Pistáchio"></div>
+function openFlavorModal(editId) {
+  const f=editId?(state.flavors||[]).find(x=>x.id===editId):null;
+  openModal(f?'Editar Sabor':'Novo Sabor', `
+    <div class="form-group"><label class="label">Nome do sabor</label><input class="input" id="f-flav-name" value="${esc(f?f.name:'')}" placeholder="Ex: Pistáchio, Amendoim, Nutella..."></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label class="label">Tipo de Tâmara</label><input class="input" id="f-prod-dateType" value="${esc(p?p.dateType:'')}" placeholder="Ex: Medjool"></div>
-      <div class="form-group"><label class="label">Recheio</label><input class="input" id="f-prod-filling" value="${esc(p?p.filling:'')}" placeholder="Ex: Pistáchio"></div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label class="label">Formato / Caixa</label><input class="input" id="f-prod-boxSize" value="${esc(p?p.boxSize:'')}" placeholder="Ex: Caixa 6"></div>
-      <div class="form-group"><label class="label">SKU / Código</label><input class="input" id="f-prod-sku" value="${esc(p?p.sku:'')}" placeholder="Ex: MUS-001"></div>
-    </div>
-    <div class="form-group"><label class="label">Preço de Venda (€)</label><input class="input" type="number" step="0.01" id="f-prod-salePrice" value="${p?p.salePrice:''}"></div>
-    <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;font-weight:600">Custos</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label class="label">Tâmara (€)</label><input class="input" type="number" step="0.01" id="f-prod-dateCost" value="${p?p.dateCost:''}"></div>
-      <div class="form-group"><label class="label">Recheio (€)</label><input class="input" type="number" step="0.01" id="f-prod-fillingCost" value="${p?p.fillingCost:''}"></div>
-      <div class="form-group"><label class="label">Embalagem (€)</label><input class="input" type="number" step="0.01" id="f-prod-packagingCost" value="${p?p.packagingCost:''}"></div>
-      <div class="form-group"><label class="label">Mão de obra (€)</label><input class="input" type="number" step="0.01" id="f-prod-laborCost" value="${p?p.laborCost:''}"></div>
-      <div class="form-group"><label class="label">Envio alocado (€)</label><input class="input" type="number" step="0.01" id="f-prod-shippingCost" value="${p?p.shippingCost:''}"></div>
+      <div class="form-group"><label class="label">Custo tâmara (€/un)</label><input class="input" type="number" step="0.01" id="f-flav-date" value="${f?f.dateCost:''}" placeholder="Custo de 1 tâmara"></div>
+      <div class="form-group"><label class="label">Custo recheio (€/un)</label><input class="input" type="number" step="0.01" id="f-flav-filling" value="${f?f.fillingCost:''}" placeholder="Custo recheio por 1 tâmara"></div>
     </div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-primary btn-full" onclick="saveProduct('${editId||''}')">${p?'Guardar':'Criar Produto'}</button>
-      ${p?`<button class="btn btn-ghost" onclick="delProduct('${p.id}')" style="color:var(--red)">Eliminar</button>`:''}
+      <button class="btn btn-primary btn-full" onclick="saveFlavor('${editId||''}')">${f?'Guardar':'Criar Sabor'}</button>
+      ${f?`<button class="btn btn-ghost" onclick="delFlavor('${f.id}')" style="color:var(--red)">Eliminar</button>`:''}
     </div>
   `);
 }
 
-function saveProduct(editId) {
-  const name=$('#f-prod-name').value.trim(); if(!name) return;
-  const data={
-    name, dateType:$('#f-prod-dateType').value.trim(), filling:$('#f-prod-filling').value.trim(),
-    boxSize:$('#f-prod-boxSize').value.trim(), sku:$('#f-prod-sku').value.trim(),
-    salePrice:parseFloat($('#f-prod-salePrice').value)||0,
-    dateCost:parseFloat($('#f-prod-dateCost').value)||0, fillingCost:parseFloat($('#f-prod-fillingCost').value)||0,
-    packagingCost:parseFloat($('#f-prod-packagingCost').value)||0, laborCost:parseFloat($('#f-prod-laborCost').value)||0,
-    shippingCost:parseFloat($('#f-prod-shippingCost').value)||0
-  };
-  if(!state.products) state.products=[];
-  if(editId) { const p=state.products.find(x=>x.id===editId); if(p) Object.assign(p,data); }
-  else { data.id=uid(); data.createdAt=Date.now(); state.products.push(data); }
+function saveFlavor(editId) {
+  const name=$('#f-flav-name').value.trim(); if(!name) return;
+  const data={ name, dateCost:parseFloat($('#f-flav-date').value)||0, fillingCost:parseFloat($('#f-flav-filling').value)||0 };
+  if(!state.flavors) state.flavors=[];
+  if(editId) { const f=state.flavors.find(x=>x.id===editId); if(f) Object.assign(f,data); }
+  else { data.id=uid(); state.flavors.push(data); }
   save(); closeModal(); render();
 }
-function delProduct(id) { state.products=(state.products||[]).filter(x=>x.id!==id); save(); closeModal(); render(); }
+function delFlavor(id) { state.flavors=(state.flavors||[]).filter(x=>x.id!==id); save(); closeModal(); render(); }
+
+function openPackModal(editId) {
+  const p=editId?(state.packs||[]).find(x=>x.id===editId):null;
+  openModal(p?'Editar Pack':'Novo Pack', `
+    <div class="form-group"><label class="label">Tamanho (nº tâmaras)</label><input class="input" type="number" id="f-pack-size" value="${p?p.size:''}" placeholder="3, 6 ou 10"></div>
+    <div class="form-group"><label class="label">Preço de venda (€)</label><input class="input" type="number" step="0.01" id="f-pack-price" value="${p?p.salePrice:''}" placeholder="Preço fixo do pack"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+      <div class="form-group"><label class="label">Embalagem (€)</label><input class="input" type="number" step="0.01" id="f-pack-pkg" value="${p?p.packagingCost:''}"></div>
+      <div class="form-group"><label class="label">Mão obra (€)</label><input class="input" type="number" step="0.01" id="f-pack-labor" value="${p?p.laborCost:''}"></div>
+      <div class="form-group"><label class="label">Envio (€)</label><input class="input" type="number" step="0.01" id="f-pack-ship" value="${p?p.shippingCost:''}"></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary btn-full" onclick="savePack('${editId||''}')">${p?'Guardar':'Criar Pack'}</button>
+      ${p?`<button class="btn btn-ghost" onclick="delPack('${p.id}')" style="color:var(--red)">Eliminar</button>`:''}
+    </div>
+  `);
+}
+
+function savePack(editId) {
+  const size=parseInt($('#f-pack-size').value); if(!size) return;
+  const data={ size, salePrice:parseFloat($('#f-pack-price').value)||0, packagingCost:parseFloat($('#f-pack-pkg').value)||0, laborCost:parseFloat($('#f-pack-labor').value)||0, shippingCost:parseFloat($('#f-pack-ship').value)||0 };
+  if(!state.packs) state.packs=[];
+  if(editId) { const p=state.packs.find(x=>x.id===editId); if(p) Object.assign(p,data); }
+  else { data.id=uid(); state.packs.push(data); }
+  state.packs.sort((a,b)=>a.size-b.size);
+  save(); closeModal(); render();
+}
+function delPack(id) { state.packs=(state.packs||[]).filter(x=>x.id!==id); save(); closeModal(); render(); }
 
 // ===== ORDERS =====
 let orderFilter='all';
@@ -875,7 +919,6 @@ function renderOrders(el) {
 function openOrderModal(editId) {
   const o=editId?(state.orders||[]).find(x=>x.id===editId):null;
   const custs=state.customers||[];
-  const prods=state.products||[];
   openModal(o?'Editar Encomenda #'+o.orderNum:'Nova Encomenda', `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group"><label class="label">Data</label><input class="input" type="date" id="f-ord-date" value="${o?o.date:new Date().toISOString().slice(0,10)}"></div>
@@ -897,7 +940,7 @@ function openOrderModal(editId) {
       <div class="form-group"><label class="label">Pagamento</label><select class="input" id="f-ord-pay">${PAY_STATUSES.map(s=>`<option ${o&&o.paymentStatus===s?'selected':''}>${s}</option>`).join('')}</select></div>
     </div>
     <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:12px 0 8px;font-weight:600">Itens</div>
-    <div id="f-ord-items">${(o?o.items:[]).map((it,i)=>orderItemRow(i,it,prods)).join('')}</div>
+    <div id="f-ord-items">${(o?o.items:[]).map((it,i)=>orderItemRow(i,it)).join('')}</div>
     <button class="btn btn-ghost btn-full" onclick="addOrderItemRow()" style="margin-bottom:12px">+ Adicionar Item</button>
     <div class="form-group"><label class="label">Notas</label><textarea class="input" id="f-ord-notes">${esc(o?o.notes:'')}</textarea></div>
     <div style="display:flex;gap:8px">
@@ -911,44 +954,48 @@ function openOrderModal(editId) {
   };
 }
 
-function orderItemRow(idx,item,prods) {
+function orderItemRow(idx,item) {
   item=item||{};
-  return `<div class="ord-item-row" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
-    <div class="form-group" style="margin:0"><label class="label">Produto</label><select class="input f-oi-prod" onchange="orderItemProdChange(this)">
-      <option value="">— Selecionar —</option>
-      ${prods.map(p=>`<option value="${p.id}" data-price="${p.salePrice}" data-cost="${productTotalCost(p)}" ${item.productId===p.id?'selected':''}>${esc(p.name)}</option>`).join('')}
+  const flavors=state.flavors||[];
+  const packs=state.packs||[];
+  return `<div class="ord-item-row" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+    <div class="form-group" style="margin:0"><label class="label">Sabor</label><select class="input f-oi-flavor" onchange="orderItemCalc(this.closest('.ord-item-row'))">
+      <option value="">—</option>
+      ${flavors.map(f=>`<option value="${f.id}" ${item.flavorId===f.id?'selected':''}>${esc(f.name)}</option>`).join('')}
     </select></div>
-    <div class="form-group" style="margin:0"><label class="label">Qtd</label><input class="input f-oi-qty" type="number" min="1" value="${item.qty||1}"></div>
-    <div class="form-group" style="margin:0"><label class="label">Preço un.</label><input class="input f-oi-price" type="number" step="0.01" value="${item.unitPrice||''}"></div>
-    <div class="form-group" style="margin:0"><label class="label">Custo un.</label><input class="input f-oi-cost" type="number" step="0.01" value="${item.unitCost||''}"></div>
+    <div class="form-group" style="margin:0"><label class="label">Pack</label><select class="input f-oi-pack" onchange="orderItemCalc(this.closest('.ord-item-row'))">
+      <option value="">—</option>
+      ${packs.map(p=>`<option value="${p.id}" ${item.packId===p.id?'selected':''}>${'Pack '+p.size+' — '+fmt(p.salePrice)}</option>`).join('')}
+    </select></div>
+    <div class="form-group" style="margin:0"><label class="label">Qtd packs</label><input class="input f-oi-qty" type="number" min="1" value="${item.qty||1}"></div>
     <button class="del-btn" onclick="this.closest('.ord-item-row').remove()" style="margin-bottom:4px">✕</button>
   </div>`;
 }
 
 function addOrderItemRow() {
   const div=document.createElement('div');
-  div.innerHTML=orderItemRow(0,{},state.products||[]);
+  div.innerHTML=orderItemRow(0,{});
   document.getElementById('f-ord-items').appendChild(div.firstElementChild);
 }
 
-function orderItemProdChange(sel) {
-  const opt=sel.options[sel.selectedIndex];
-  const row=sel.closest('.ord-item-row');
-  if(opt.dataset.price) row.querySelector('.f-oi-price').value=opt.dataset.price;
-  if(opt.dataset.cost) row.querySelector('.f-oi-cost').value=opt.dataset.cost;
-}
+function orderItemCalc(row) { /* auto-fill handled at save time via flavor+pack lookup */ }
 
 function saveOrder(editId) {
   const rows=document.querySelectorAll('#f-ord-items .ord-item-row');
   const items=[];
   rows.forEach(r=>{
-    const prodId=r.querySelector('.f-oi-prod').value;
-    const prod=(state.products||[]).find(p=>p.id===prodId);
+    const flavorId=r.querySelector('.f-oi-flavor').value;
+    const packId=r.querySelector('.f-oi-pack').value;
+    const flavor=(state.flavors||[]).find(f=>f.id===flavorId);
+    const pack=(state.packs||[]).find(p=>p.id===packId);
+    if(!flavor||!pack) return;
+    const cost=packTotalCost(pack,flavor);
     items.push({
-      productId:prodId, productName:prod?prod.name:r.querySelector('.f-oi-prod').options[r.querySelector('.f-oi-prod').selectedIndex].text,
-      qty:parseFloat(r.querySelector('.f-oi-qty').value)||0,
-      unitPrice:parseFloat(r.querySelector('.f-oi-price').value)||0,
-      unitCost:parseFloat(r.querySelector('.f-oi-cost').value)||0
+      flavorId, packId,
+      productName:flavor.name+' — Pack '+pack.size,
+      qty:parseFloat(r.querySelector('.f-oi-qty').value)||1,
+      unitPrice:parseFloat(pack.salePrice)||0,
+      unitCost:cost
     });
   });
   // Handle new customer inline
@@ -1157,7 +1204,6 @@ function renderFeedback(el) {
 function openFeedbackModal() {
   const custs=state.customers||[];
   const ords=(state.orders||[]).filter(o=>o.status==='entregue');
-  const prods=state.products||[];
   const complaints=['Qualidade do produto','Embalagem danificada','Entrega atrasada','Produto errado','Outro'];
   openModal('Novo Feedback', `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -1165,7 +1211,7 @@ function openFeedbackModal() {
       <div class="form-group"><label class="label">Encomenda</label><select class="input" id="f-fb-ord"><option value="">—</option>${ords.map(o=>`<option value="${o.id}">#${o.orderNum}</option>`).join('')}</select></div>
     </div>
     <div class="form-group"><label class="label">Avaliação</label><div class="stars" id="f-fb-stars">${[1,2,3,4,5].map(n=>`<button class="star-btn" onclick="pickFbStar(${n})">★</button>`).join('')}</div></div>
-    <div class="form-group"><label class="label">Produto favorito</label><select class="input" id="f-fb-fav"><option value="">—</option>${prods.map(p=>`<option>${esc(p.name)}</option>`).join('')}</select></div>
+    <div class="form-group"><label class="label">Produto favorito</label><select class="input" id="f-fb-fav"><option value="">—</option>${(state.flavors||[]).map(f=>`<option>${esc(f.name)}</option>`).join('')}</select></div>
     <div class="form-group"><label class="label">Comentário</label><textarea class="input" id="f-fb-comment" placeholder="O que o cliente achou..."></textarea></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group"><label class="label">Feedback embalagem</label><input class="input" id="f-fb-pkg" placeholder="Opcional"></div>
