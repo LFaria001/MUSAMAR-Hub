@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773525566';
+var APP_V='t1773526045';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -802,14 +802,17 @@ function renderProducts(el) {
 
     ${flavors.length?`<div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;font-weight:600">Sabores</div>
     <div class="card" style="padding:0;overflow-x:auto;margin-bottom:24px"><table class="data-table">
-      <thead><tr><th>Sabor</th><th>Custo tâmara</th><th>Custo recheio</th><th>Custo unitário</th></tr></thead>
+      <thead><tr><th>Sabor</th><th>Custo tâmara</th><th>Custo recheio</th><th>Custo unitário</th><th>Receita</th></tr></thead>
       <tbody>${flavors.map(f=>{
         const uc=flavorUnitCost(f);
+        const inv=state.inventory||[];
+        const recipeStr=(f.recipe||[]).map(r=>{const it=inv.find(i=>i.id===r.inventoryId);return it?(r.qty+' '+(r.unit||it.unit||'un')+' '+it.name):'?';}).join(', ');
         return `<tr onclick="openFlavorModal('${f.id}')" style="cursor:pointer">
           <td style="font-weight:500">${esc(f.name)}</td>
           <td style="color:var(--muted)">${fmt(f.dateCost)}</td>
           <td style="color:var(--muted)">${fmt(f.fillingCost)}</td>
           <td>${fmt(uc)}</td>
+          <td style="font-size:10px;color:var(--dim)">${recipeStr||'Sem receita'}</td>
         </tr>`;
       }).join('')}</tbody>
     </table></div>`:''}
@@ -830,12 +833,17 @@ function renderProducts(el) {
 
 function openFlavorModal(editId) {
   const f=editId?(state.flavors||[]).find(x=>x.id===editId):null;
+  const inv=state.inventory||[];
+  const recipe=f?(f.recipe||[]):[];
   openModal(f?'Editar Sabor':'Novo Sabor', `
     <div class="form-group"><label class="label">Nome do sabor</label><input class="input" id="f-flav-name" value="${esc(f?f.name:'')}" placeholder="Ex: Pistáchio, Amendoim, Nutella..."></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group"><label class="label">Custo tâmara (€/un)</label><input class="input" type="number" step="0.01" id="f-flav-date" value="${f?f.dateCost:''}" placeholder="Custo de 1 tâmara"></div>
       <div class="form-group"><label class="label">Custo recheio (€/un)</label><input class="input" type="number" step="0.01" id="f-flav-filling" value="${f?f.fillingCost:''}" placeholder="Custo recheio por 1 tâmara"></div>
     </div>
+    <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;font-weight:600">Receita por 1 tâmara</div>
+    <div id="f-flav-recipe">${recipe.map((r,i)=>recipeIngRow(r,inv)).join('')}</div>
+    <button class="btn btn-ghost btn-full" onclick="addRecipeRow()" style="margin-bottom:16px">+ Adicionar Ingrediente</button>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary btn-full" onclick="saveFlavor('${editId||''}')">${f?'Guardar':'Criar Sabor'}</button>
       ${f?`<button class="btn btn-ghost" onclick="delFlavor('${f.id}')" style="color:var(--red)">Eliminar</button>`:''}
@@ -843,15 +851,58 @@ function openFlavorModal(editId) {
   `);
 }
 
+function recipeIngRow(r,inv) {
+  r=r||{};
+  inv=inv||(state.inventory||[]);
+  return `<div class="recipe-row" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+    <div class="form-group" style="margin:0"><label class="label">Ingrediente</label><select class="input f-ri-inv">
+      <option value="">—</option>
+      ${inv.map(i=>`<option value="${i.id}" ${r.inventoryId===i.id?'selected':''}>${esc(i.name)} (${esc(i.unit||'un')})</option>`).join('')}
+    </select></div>
+    <div class="form-group" style="margin:0"><label class="label">Qtd/tâmara</label><input class="input f-ri-qty" type="number" step="0.01" value="${r.qty||''}"></div>
+    <div class="form-group" style="margin:0"><label class="label">Unidade</label><input class="input f-ri-unit" value="${esc(r.unit||'')}" placeholder="g, ml, un..." style="font-size:11px"></div>
+    <button class="del-btn" onclick="this.closest('.recipe-row').remove()" style="margin-bottom:4px">✕</button>
+  </div>`;
+}
+
+function addRecipeRow() {
+  const div=document.createElement('div');
+  div.innerHTML=recipeIngRow({},state.inventory||[]);
+  document.getElementById('f-flav-recipe').appendChild(div.firstElementChild);
+}
+
 function saveFlavor(editId) {
   const name=$('#f-flav-name').value.trim(); if(!name) return;
-  const data={ name, dateCost:parseFloat($('#f-flav-date').value)||0, fillingCost:parseFloat($('#f-flav-filling').value)||0 };
+  // Collect recipe
+  const recipe=[];
+  document.querySelectorAll('#f-flav-recipe .recipe-row').forEach(r=>{
+    const invId=r.querySelector('.f-ri-inv').value;
+    const qty=parseFloat(r.querySelector('.f-ri-qty').value)||0;
+    const unit=r.querySelector('.f-ri-unit').value.trim();
+    if(invId&&qty>0) recipe.push({inventoryId:invId,qty,unit});
+  });
+  const data={ name, dateCost:parseFloat($('#f-flav-date').value)||0, fillingCost:parseFloat($('#f-flav-filling').value)||0, recipe };
   if(!state.flavors) state.flavors=[];
   if(editId) { const f=state.flavors.find(x=>x.id===editId); if(f) Object.assign(f,data); }
   else { data.id=uid(); state.flavors.push(data); }
   save(); closeModal(); render();
 }
 function delFlavor(id) { state.flavors=(state.flavors||[]).filter(x=>x.id!==id); save(); closeModal(); render(); }
+
+// Auto-deduct inventory when order is delivered
+function deductInventoryForOrder(order) {
+  if(order._stockDeducted) return; // prevent double deduction
+  (order.items||[]).forEach(item=>{
+    const flavor=(state.flavors||[]).find(f=>f.id===item.flavorId);
+    if(!flavor||!flavor.recipe) return;
+    const totalUnits=(parseFloat(item.qty)||0)*(parseFloat(item.packSize||((state.packs||[]).find(p=>p.id===item.packId)||{}).size)||0);
+    flavor.recipe.forEach(r=>{
+      const inv=(state.inventory||[]).find(i=>i.id===r.inventoryId);
+      if(inv) { inv.qtyUsed=(parseFloat(inv.qtyUsed)||0)+(r.qty*totalUnits); }
+    });
+  });
+  order._stockDeducted=true;
+}
 
 function openPackModal(editId) {
   const p=editId?(state.packs||[]).find(x=>x.id===editId):null;
@@ -989,7 +1040,7 @@ function saveOrder(editId) {
     if(!flavor||!pack) return;
     const cost=packTotalCost(pack,flavor);
     items.push({
-      flavorId, packId,
+      flavorId, packId, packSize:pack.size,
       productName:flavor.name+' — Pack '+pack.size,
       qty:parseFloat(r.querySelector('.f-oi-qty').value)||1,
       unitPrice:parseFloat(pack.salePrice)||0,
@@ -1004,14 +1055,35 @@ function saveOrder(editId) {
       if(!state.customers) state.customers=[]; state.customers.push(nc); customerId=nc.id; }
     else customerId='';
   }
+  const newStatus=$('#f-ord-status').value;
   const data={
     date:$('#f-ord-date').value, channel:$('#f-ord-channel').value,
-    customerId, status:$('#f-ord-status').value, paymentStatus:$('#f-ord-pay').value,
+    customerId, status:newStatus, paymentStatus:$('#f-ord-pay').value,
     notes:$('#f-ord-notes').value.trim(), items
   };
   if(!state.orders) state.orders=[];
-  if(editId) { const o=state.orders.find(x=>x.id===editId); if(o) Object.assign(o,data); }
-  else { data.id=uid(); state.orderSeq=(state.orderSeq||0)+1; data.orderNum=state.orderSeq; data.createdAt=Date.now(); state.orders.push(data); }
+  if(editId) {
+    const o=state.orders.find(x=>x.id===editId);
+    if(o) {
+      const wasDelivered=o.status==='entregue';
+      Object.assign(o,data);
+      // Auto-deduct stock when marked as delivered
+      if(newStatus==='entregue'&&!wasDelivered) deductInventoryForOrder(o);
+    }
+  } else {
+    data.id=uid(); state.orderSeq=(state.orderSeq||0)+1; data.orderNum=state.orderSeq; data.createdAt=Date.now();
+    if(newStatus==='entregue') { data._stockDeducted=false; state.orders.push(data); deductInventoryForOrder(data); }
+    else state.orders.push(data);
+  }
+  // Auto-create finance entry when marked as paid
+  if(newStatus==='pago'||data.paymentStatus==='pago') {
+    const ordId=editId||data.id;
+    const alreadyLogged=(state.finances||[]).some(f=>f.orderId===ordId);
+    if(!alreadyLogged) {
+      const rev=orderRevenue(data);
+      state.finances.unshift({id:uid(),description:'Encomenda #'+(data.orderNum||''),amount:rev,type:'entrada',date:data.date,orderId:ordId});
+    }
+  }
   save(); closeModal(); render();
 }
 
