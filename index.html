@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773520836';
+var APP_V='t1773520946';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -1410,7 +1410,7 @@ function renderNoteCard(n) {
     <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">${esc(n.title||'Sem título')}</div>
-        <div style="font-size:12px;color:var(--muted);white-space:pre-wrap;max-height:60px;overflow:hidden">${esc((n.body||'').slice(0,120))}</div>
+        <div style="font-size:12px;color:var(--muted);white-space:pre-wrap">${esc(n.body||'')}</div>
         ${dateStr?`<div style="font-size:10px;color:var(--dim);margin-top:6px">${dateStr} · ${esc(n.author||'')}</div>`:''}
       </div>
       <button class="del-btn" onclick="event.stopPropagation();delNote('${n.id}')">✕</button>
