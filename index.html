@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773526045';
+var APP_V='t1773526218';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -1182,15 +1182,19 @@ function renderInventory(el) {
       <button class="btn btn-primary" onclick="openInvModal()">+ Novo Item</button>
     </div>
     ${items.length?`<div class="card" style="padding:0;overflow-x:auto"><table class="data-table">
-      <thead><tr><th>Material</th><th>Categoria</th><th>Stock</th><th>Mín.</th><th>Estado</th><th>Custo/un</th></tr></thead>
+      <thead><tr><th>Material</th><th>Categoria</th><th>Stock</th><th>Mín.</th><th>Estado</th><th>Desperdício</th><th>Custo/un</th></tr></thead>
       <tbody>${items.map(i=>{
         const stock=invCurrentStock(i), isLow=stock<(parseFloat(i.minStock)||0);
+        const wasted=parseFloat(i.qtyWasted)||0;
+        const received=parseFloat(i.qtyReceived)||0;
+        const wastePct=received>0?(wasted/received*100):0;
         return `<tr onclick="openInvModal('${i.id}')">
           <td><div style="font-weight:500">${esc(i.name)}</div>${i.supplier?`<div style="font-size:10px;color:var(--dim)">${esc(i.supplier)}</div>`:''}</td>
           <td style="color:var(--muted)">${esc(i.category||'—')}</td>
           <td style="font-weight:600;color:${isLow?'var(--red)':'var(--text)'}">${stock} ${esc(i.unit||'un')}</td>
           <td style="color:var(--dim)">${i.minStock||'—'}</td>
           <td>${isLow?'<span class="badge badge-low">Baixo</span>':'<span class="badge badge-ok">OK</span>'}</td>
+          <td style="color:${wastePct>10?'var(--red)':wastePct>0?'var(--gold)':'var(--dim)'}">${wasted>0?wastePct.toFixed(1)+'%':'0%'}</td>
           <td style="color:var(--muted)">${i.costPerUnit?fmt(i.costPerUnit):'—'}</td>
         </tr>`;
       }).join('')}</tbody>
