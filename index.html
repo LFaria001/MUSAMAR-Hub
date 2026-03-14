@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773525008';
+var APP_V='t1773525566';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -601,7 +601,7 @@ function render() {
 function flavorUnitCost(f) { return (parseFloat(f.dateCost)||0)+(parseFloat(f.fillingCost)||0); }
 function packTotalCost(pack, flavor) {
   const unitCost=flavorUnitCost(flavor);
-  return unitCost*(parseFloat(pack.size)||0)+(parseFloat(pack.packagingCost)||0)+(parseFloat(pack.laborCost)||0)+(parseFloat(pack.shippingCost)||0);
+  return unitCost*(parseFloat(pack.size)||0)+(parseFloat(pack.packagingCost)||0)+(parseFloat(pack.deliveryCost)||0);
 }
 function packProfit(pack, flavor) { return (parseFloat(pack.salePrice)||0)-packTotalCost(pack,flavor); }
 function packMargin(pack, flavor) { const sp=parseFloat(pack.salePrice)||0; return sp>0?(packProfit(pack,flavor)/sp*100):0; }
@@ -791,13 +791,12 @@ function renderProducts(el) {
 
     ${packs.length?`<div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;font-weight:600">Packs</div>
     <div class="card" style="padding:0;overflow-x:auto;margin-bottom:24px"><table class="data-table">
-      <thead><tr><th>Pack</th><th>Preço</th><th>Embalagem</th><th>Mão obra</th><th>Envio</th></tr></thead>
+      <thead><tr><th>Pack</th><th>Preço</th><th>Embalagem</th><th>Entrega</th></tr></thead>
       <tbody>${packs.map(p=>`<tr onclick="openPackModal('${p.id}')" style="cursor:pointer">
         <td style="font-weight:600;color:var(--gold)">Pack ${p.size}</td>
         <td>${fmt(p.salePrice)}</td>
         <td style="color:var(--muted)">${fmt(p.packagingCost)}</td>
-        <td style="color:var(--muted)">${fmt(p.laborCost)}</td>
-        <td style="color:var(--muted)">${fmt(p.shippingCost)}</td>
+        <td style="color:var(--muted)">${fmt(p.deliveryCost)}</td>
       </tr>`).join('')}</tbody>
     </table></div>`:''}
 
@@ -859,10 +858,9 @@ function openPackModal(editId) {
   openModal(p?'Editar Pack':'Novo Pack', `
     <div class="form-group"><label class="label">Tamanho (nº tâmaras)</label><input class="input" type="number" id="f-pack-size" value="${p?p.size:''}" placeholder="3, 6 ou 10"></div>
     <div class="form-group"><label class="label">Preço de venda (€)</label><input class="input" type="number" step="0.01" id="f-pack-price" value="${p?p.salePrice:''}" placeholder="Preço fixo do pack"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group"><label class="label">Embalagem (€)</label><input class="input" type="number" step="0.01" id="f-pack-pkg" value="${p?p.packagingCost:''}"></div>
-      <div class="form-group"><label class="label">Mão obra (€)</label><input class="input" type="number" step="0.01" id="f-pack-labor" value="${p?p.laborCost:''}"></div>
-      <div class="form-group"><label class="label">Envio (€)</label><input class="input" type="number" step="0.01" id="f-pack-ship" value="${p?p.shippingCost:''}"></div>
+      <div class="form-group"><label class="label">Entrega (€)</label><input class="input" type="number" step="0.01" id="f-pack-del" value="${p?p.deliveryCost:''}"></div>
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary btn-full" onclick="savePack('${editId||''}')">${p?'Guardar':'Criar Pack'}</button>
@@ -873,7 +871,7 @@ function openPackModal(editId) {
 
 function savePack(editId) {
   const size=parseInt($('#f-pack-size').value); if(!size) return;
-  const data={ size, salePrice:parseFloat($('#f-pack-price').value)||0, packagingCost:parseFloat($('#f-pack-pkg').value)||0, laborCost:parseFloat($('#f-pack-labor').value)||0, shippingCost:parseFloat($('#f-pack-ship').value)||0 };
+  const data={ size, salePrice:parseFloat($('#f-pack-price').value)||0, packagingCost:parseFloat($('#f-pack-pkg').value)||0, deliveryCost:parseFloat($('#f-pack-del').value)||0 };
   if(!state.packs) state.packs=[];
   if(editId) { const p=state.packs.find(x=>x.id===editId); if(p) Object.assign(p,data); }
   else { data.id=uid(); state.packs.push(data); }
