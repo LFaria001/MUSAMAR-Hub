@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773526318';
+var APP_V='t1773526670';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -2046,7 +2046,7 @@ function renderNoteCard(n) {
   return `<div class="card" style="padding:16px;margin-bottom:12px;cursor:pointer" onclick="openNoteModal('${n.id}')">
     <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">${esc(n.title||'Sem título')}</div>
+        ${n.title?`<div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">${esc(n.title)}</div>`:''}
         <div style="font-size:12px;color:var(--muted);white-space:pre-wrap">${esc(n.body||'')}</div>
         ${dateStr?`<div style="font-size:10px;color:var(--dim);margin-top:6px">${dateStr} · ${esc(n.author||'')}</div>`:''}
       </div>
