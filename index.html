@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773526218';
+var APP_V='t1773526318';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim(); if(v!==APP_V&&!location.search.includes('_v='+v)) location.replace(location.pathname+'?_v='+v);
 }).catch(function(){});
@@ -2037,7 +2037,7 @@ function addEvent() {
 function delEvent(id) { state.calendar=state.calendar.filter(e=>e.id!==id); save(); render(); }
 
 // ===== 9. NOTAS =====
-const NOTE_SECTIONS = ['Geral','Marketing'];
+const NOTE_SECTIONS = ['Geral','Marketing','Claude'];
 let activeNoteSection = 'Geral';
 
 function renderNoteCard(n) {
