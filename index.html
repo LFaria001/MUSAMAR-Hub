@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773584592';
+var APP_V='t1773584734';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -764,10 +764,12 @@ function renderProducts(el) {
     </div>
 
     ${packs.length?`<div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;font-weight:600">Packs</div>
-    <div style="display:grid;gap:8px;margin-bottom:24px">${packs.map(p=>`<div class="card" onclick="openPackModal('${p.id}')" style="cursor:pointer;padding:12px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:center">
-      <div style="font-weight:600;color:var(--gold);font-size:15px">Pack ${p.size}</div>
-      <div style="text-align:center"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Preço</div><div>${fmt(p.salePrice)}</div></div>
-      <div style="text-align:right"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Emb. + Entrega</div><div style="color:var(--muted)">${fmt(p.packagingCost)} + ${fmt(p.deliveryCost)}</div></div>
+    <div style="display:grid;gap:8px;margin-bottom:24px">${packs.map(p=>`<div class="card" onclick="openPackModal('${p.id}')" style="cursor:pointer;padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-weight:600;color:var(--gold)">Pack ${p.size}</div>
+        <div style="font-weight:600">${fmt(p.salePrice)}</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Embalagem ${fmt(p.packagingCost)} · Entrega ${fmt(p.deliveryCost)}</div>
     </div>`).join('')}</div>`:''}
 
     ${flavors.length?`<div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;font-weight:600">Sabores</div>
@@ -776,31 +778,25 @@ function renderProducts(el) {
         const inv=state.inventory||[];
         const recipeStr=(f.recipe||[]).map(r=>{const it=inv.find(i=>i.id===r.inventoryId);return it?(r.qty+' '+(r.unit||it.unit||'un')+' '+it.name):'?';}).join(', ');
         return `<div class="card" onclick="openFlavorModal('${f.id}')" style="cursor:pointer;padding:12px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-            <div style="font-weight:500;font-size:14px">${esc(f.name)}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-weight:500">${esc(f.name)}</div>
             <div style="font-weight:600">${fmt(uc)}<span style="font-size:10px;color:var(--muted)">/un</span></div>
           </div>
-          <div style="display:flex;gap:12px;font-size:11px;color:var(--muted)">
-            <span>Tâmara: ${fmt(f.dateCost)}</span><span>Recheio: ${fmt(f.fillingCost)}</span>
-          </div>
-          ${recipeStr?`<div style="font-size:10px;color:var(--dim);margin-top:4px">${recipeStr}</div>`:''}
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Tâmara ${fmt(f.dateCost)} · Recheio ${fmt(f.fillingCost)}</div>
+          ${recipeStr?`<div style="font-size:10px;color:var(--dim);margin-top:3px;word-break:break-word">${recipeStr}</div>`:''}
         </div>`;
       }).join('')}</div>`:''}
 
     ${flavors.length&&packs.length?`<div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;font-weight:600">Matriz Lucro (Sabor × Pack)</div>
     <div style="display:grid;gap:8px">${flavors.map(f=>`<div class="card" style="padding:12px">
       <div style="font-weight:500;margin-bottom:8px">${esc(f.name)}</div>
-      <div style="display:grid;grid-template-columns:repeat(${Math.min(packs.length,3)},1fr);gap:8px">
-        ${packs.map(p=>{
+      ${packs.map(p=>{
           const cost=packTotalCost(p,f), profit=packProfit(p,f), margin=packMargin(p,f);
-          return `<div style="text-align:center;padding:8px;background:rgba(255,255,255,0.03);border-radius:8px">
-            <div style="font-size:10px;color:var(--muted);margin-bottom:4px">Pack ${p.size}</div>
-            <div style="color:${profit>=0?'var(--green)':'var(--red)'};font-weight:600">${fmt(profit)}</div>
-            <div style="font-size:9px;opacity:0.7">${margin.toFixed(0)}% margem</div>
-            <div style="font-size:9px;color:var(--muted);margin-top:2px">custo ${fmt(cost)}</div>
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+            <div><div style="font-size:12px">Pack ${p.size}</div><div style="font-size:10px;color:var(--muted)">custo ${fmt(cost)}</div></div>
+            <div style="text-align:right"><div style="color:${profit>=0?'var(--green)':'var(--red)'};font-weight:600">${fmt(profit)}</div><div style="font-size:10px;opacity:0.7">${margin.toFixed(0)}%</div></div>
           </div>`;
         }).join('')}
-      </div>
     </div>`).join('')}</div>`:'<div class="empty"><div class="icon">🍫</div><p>Adiciona sabores e packs para ver a matriz de lucro.</p></div>'}`;
 }
 
