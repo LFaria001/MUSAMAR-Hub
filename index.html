@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773585570';
+var APP_V='t1773585781';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -983,6 +983,7 @@ function openOrderModal(editId) {
     </div>
   `);
   if(!o) addOrderItemRow();
+  else document.querySelectorAll('#f-ord-items .ord-item-row').forEach(r=>updatePackDateCount(r));
   document.getElementById('f-ord-cust').onchange=function(){
     document.getElementById('f-ord-new-cust').style.display=this.value==='__new'?'block':'none';
   };
@@ -1023,7 +1024,7 @@ function orderDateRow(d) {
       ${flavors.map(f=>`<option value="${f.id}" ${d.flavorId===f.id?'selected':''}>${esc(f.name)}</option>`).join('')}
     </select></div>
     <div class="form-group" style="margin:0;width:60px"><label class="label" style="font-size:9px">Qtd</label><input class="input f-od-qty" type="number" min="1" value="${d.qty||1}" oninput="updatePackDateCount(this.closest('.ord-item-row'))"></div>
-    <button class="del-btn" onclick="this.closest('.ord-date-row').remove();updatePackDateCount(this.closest('.ord-item-row'))" style="margin-bottom:4px;font-size:10px">✕</button>
+    <button class="del-btn" onclick="var ir=this.closest('.ord-item-row');this.closest('.ord-date-row').remove();updatePackDateCount(ir)" style="margin-bottom:4px;font-size:10px">✕</button>
   </div>`;
 }
 
@@ -1863,13 +1864,31 @@ function renderAnalytics(el) {
   // ── 4. Top sabores ──
   const flavorSales={};
   filtered.forEach(o=>(o.items||[]).forEach(i=>{
-    const fId=i.flavorId||'';
-    if(!fId) return;
-    if(!flavorSales[fId]) flavorSales[fId]={id:fId,name:'',qty:0,rev:0,profit:0,packs:0};
-    flavorSales[fId].qty+=(parseFloat(i.qty)||0)*(parseFloat(i.packSize)||0);
-    flavorSales[fId].packs+=(parseFloat(i.qty)||0);
-    flavorSales[fId].rev+=(parseFloat(i.qty)||0)*(parseFloat(i.unitPrice)||0);
-    flavorSales[fId].profit+=(parseFloat(i.qty)||0)*((parseFloat(i.unitPrice)||0)-(parseFloat(i.unitCost)||0));
+    const packQty=parseFloat(i.qty)||0;
+    const dates=i.dates||[];
+    if(dates.length) {
+      dates.forEach(d=>{
+        const fId=d.flavorId; if(!fId) return;
+        if(!flavorSales[fId]) flavorSales[fId]={id:fId,name:'',qty:0,rev:0,profit:0,packs:0};
+        flavorSales[fId].qty+=d.qty*packQty;
+      });
+    } else if(i.flavorId) {
+      const fId=i.flavorId;
+      if(!flavorSales[fId]) flavorSales[fId]={id:fId,name:'',qty:0,rev:0,profit:0,packs:0};
+      flavorSales[fId].qty+=packQty*(parseFloat(i.packSize)||0);
+    }
+    // revenue/profit per pack item (shared across flavors)
+    const fIds=dates.length?dates.map(d=>d.flavorId).filter(Boolean):(i.flavorId?[i.flavorId]:[]);
+    if(fIds.length) {
+      const revShare=packQty*(parseFloat(i.unitPrice)||0)/fIds.length;
+      const profitShare=packQty*((parseFloat(i.unitPrice)||0)-(parseFloat(i.unitCost)||0))/fIds.length;
+      fIds.forEach(fId=>{
+        if(!flavorSales[fId]) flavorSales[fId]={id:fId,name:'',qty:0,rev:0,profit:0,packs:0};
+        flavorSales[fId].rev+=revShare;
+        flavorSales[fId].profit+=profitShare;
+        flavorSales[fId].packs+=packQty/fIds.length;
+      });
+    }
   }));
   Object.values(flavorSales).forEach(fs=>{
     const f=flavors.find(x=>x.id===fs.id);
@@ -1930,9 +1949,19 @@ function renderAnalytics(el) {
     if(!o.date) return;
     const m=parseInt(o.date.slice(5,7))-1;
     (o.items||[]).forEach(i=>{
-      const fId=i.flavorId; if(!fId) return;
-      if(!flavorSeason[fId]) flavorSeason[fId]={name:'',months:Array(12).fill(0)};
-      flavorSeason[fId].months[m]+=(parseFloat(i.qty)||0);
+      const packQty=parseFloat(i.qty)||0;
+      const dates=i.dates||[];
+      if(dates.length) {
+        dates.forEach(d=>{
+          const fId=d.flavorId; if(!fId) return;
+          if(!flavorSeason[fId]) flavorSeason[fId]={name:'',months:Array(12).fill(0)};
+          flavorSeason[fId].months[m]+=d.qty*packQty;
+        });
+      } else if(i.flavorId) {
+        const fId=i.flavorId;
+        if(!flavorSeason[fId]) flavorSeason[fId]={name:'',months:Array(12).fill(0)};
+        flavorSeason[fId].months[m]+=packQty*(parseFloat(i.packSize)||0);
+      }
     });
   });
   Object.values(flavorSeason).forEach(fs=>{
