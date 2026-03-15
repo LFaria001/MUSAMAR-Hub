@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773584734';
+var APP_V='t1773585264';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -860,15 +860,31 @@ function delFlavor(id) { state.flavors=(state.flavors||[]).filter(x=>x.id!==id);
 
 // Auto-deduct inventory when order is delivered
 function deductInventoryForOrder(order) {
-  if(order._stockDeducted) return; // prevent double deduction
+  if(order._stockDeducted) return;
   (order.items||[]).forEach(item=>{
-    const flavor=(state.flavors||[]).find(f=>f.id===item.flavorId);
-    if(!flavor||!flavor.recipe) return;
-    const totalUnits=(parseFloat(item.qty)||0)*(parseFloat(item.packSize||((state.packs||[]).find(p=>p.id===item.packId)||{}).size)||0);
-    flavor.recipe.forEach(r=>{
-      const inv=(state.inventory||[]).find(i=>i.id===r.inventoryId);
-      if(inv) { inv.qtyUsed=(parseFloat(inv.qtyUsed)||0)+(r.qty*totalUnits); }
-    });
+    const packQty=parseFloat(item.qty)||0;
+    // New format: item.dates is array of {flavorId, qty}
+    const dates=item.dates||[];
+    if(dates.length) {
+      dates.forEach(d=>{
+        const flavor=(state.flavors||[]).find(f=>f.id===d.flavorId);
+        if(!flavor||!flavor.recipe) return;
+        const totalUnits=d.qty*packQty;
+        flavor.recipe.forEach(r=>{
+          const inv=(state.inventory||[]).find(i=>i.id===r.inventoryId);
+          if(inv) { inv.qtyUsed=(parseFloat(inv.qtyUsed)||0)+(r.qty*totalUnits); }
+        });
+      });
+    } else if(item.flavorId) {
+      // backward compat: old single-flavor items
+      const flavor=(state.flavors||[]).find(f=>f.id===item.flavorId);
+      if(!flavor||!flavor.recipe) return;
+      const totalUnits=packQty*(parseFloat(item.packSize)||0);
+      flavor.recipe.forEach(r=>{
+        const inv=(state.inventory||[]).find(i=>i.id===r.inventoryId);
+        if(inv) { inv.qtyUsed=(parseFloat(inv.qtyUsed)||0)+(r.qty*totalUnits); }
+      });
+    }
   });
   order._stockDeducted=true;
 }
@@ -959,7 +975,7 @@ function openOrderModal(editId) {
     </div>
     <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:12px 0 8px;font-weight:600">Itens</div>
     <div id="f-ord-items">${(o?o.items:[]).map((it,i)=>orderItemRow(i,it)).join('')}</div>
-    <button class="btn btn-ghost btn-full" onclick="addOrderItemRow()" style="margin-bottom:12px">+ Adicionar Item</button>
+    <button class="btn btn-ghost btn-full" onclick="addOrderItemRow()" style="margin-bottom:12px">+ Adicionar Pack</button>
     <div class="form-group"><label class="label">Notas</label><textarea class="input" id="f-ord-notes">${esc(o?o.notes:'')}</textarea></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary btn-full" onclick="saveOrder('${editId||''}')">${o?'Guardar':'Criar Encomenda'}</button>
@@ -976,44 +992,104 @@ function orderItemRow(idx,item) {
   item=item||{};
   const flavors=state.flavors||[];
   const packs=state.packs||[];
-  return `<div class="ord-item-row" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
-    <div class="form-group" style="margin:0"><label class="label">Sabor</label><select class="input f-oi-flavor" onchange="orderItemCalc(this.closest('.ord-item-row'))">
-      <option value="">—</option>
-      ${flavors.map(f=>`<option value="${f.id}" ${item.flavorId===f.id?'selected':''}>${esc(f.name)}</option>`).join('')}
-    </select></div>
-    <div class="form-group" style="margin:0"><label class="label">Pack</label><select class="input f-oi-pack" onchange="orderItemCalc(this.closest('.ord-item-row'))">
-      <option value="">—</option>
-      ${packs.map(p=>`<option value="${p.id}" ${item.packId===p.id?'selected':''}>${'Pack '+p.size+' — '+fmt(p.salePrice)}</option>`).join('')}
-    </select></div>
-    <div class="form-group" style="margin:0"><label class="label">Qtd packs</label><input class="input f-oi-qty" type="number" min="1" value="${item.qty||1}"></div>
-    <button class="del-btn" onclick="this.closest('.ord-item-row').remove()" style="margin-bottom:4px">✕</button>
+  const dates=item.dates||[];
+  // backward compat: old items had flavorId instead of dates
+  const legacyDates=(!dates.length&&item.flavorId)?[{flavorId:item.flavorId,qty:item.packSize||1}]:dates;
+  return `<div class="ord-item-row" style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:end;gap:8px;margin-bottom:8px">
+      <div class="form-group" style="margin:0;flex:1"><label class="label">Pack</label><select class="input f-oi-pack" onchange="updatePackDateCount(this.closest('.ord-item-row'))">
+        <option value="">—</option>
+        ${packs.map(p=>`<option value="${p.id}" ${item.packId===p.id?'selected':''}>${'Pack '+p.size+' — '+fmt(p.salePrice)}</option>`).join('')}
+      </select></div>
+      <div class="form-group" style="margin:0;width:70px"><label class="label">Qtd</label><input class="input f-oi-qty" type="number" min="1" value="${item.qty||1}"></div>
+      <button class="del-btn" onclick="this.closest('.ord-item-row').remove()" style="margin-bottom:4px">✕</button>
+    </div>
+    <div class="f-oi-dates" style="padding-left:4px">
+      ${legacyDates.map(d=>orderDateRow(d)).join('')}
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+      <button class="btn btn-ghost" onclick="addOrderDateRow(this.closest('.ord-item-row'))" style="font-size:11px;padding:4px 10px">+ Tâmara</button>
+      <div class="f-oi-count" style="font-size:10px;color:var(--muted)"></div>
+    </div>
   </div>`;
+}
+
+function orderDateRow(d) {
+  d=d||{};
+  const flavors=state.flavors||[];
+  return `<div class="ord-date-row" style="display:flex;gap:8px;margin-bottom:6px;align-items:end">
+    <div class="form-group" style="margin:0;flex:1"><label class="label" style="font-size:9px">Sabor</label><select class="input f-od-flavor">
+      <option value="">—</option>
+      ${flavors.map(f=>`<option value="${f.id}" ${d.flavorId===f.id?'selected':''}>${esc(f.name)}</option>`).join('')}
+    </select></div>
+    <div class="form-group" style="margin:0;width:60px"><label class="label" style="font-size:9px">Qtd</label><input class="input f-od-qty" type="number" min="1" value="${d.qty||1}"></div>
+    <button class="del-btn" onclick="this.closest('.ord-date-row').remove();updatePackDateCount(this.closest('.ord-item-row'))" style="margin-bottom:4px;font-size:10px">✕</button>
+  </div>`;
+}
+
+function addOrderDateRow(itemRow) {
+  const container=itemRow.querySelector('.f-oi-dates');
+  const div=document.createElement('div');
+  div.innerHTML=orderDateRow({});
+  container.appendChild(div.firstElementChild);
+  updatePackDateCount(itemRow);
 }
 
 function addOrderItemRow() {
   const div=document.createElement('div');
   div.innerHTML=orderItemRow(0,{});
-  document.getElementById('f-ord-items').appendChild(div.firstElementChild);
+  const row=div.firstElementChild;
+  document.getElementById('f-ord-items').appendChild(row);
+  addOrderDateRow(row);
 }
 
-function orderItemCalc(row) { /* auto-fill handled at save time via flavor+pack lookup */ }
+function updatePackDateCount(itemRow) {
+  if(!itemRow) return;
+  const packSel=itemRow.querySelector('.f-oi-pack');
+  const pack=(state.packs||[]).find(p=>p.id===packSel.value);
+  const dateRows=itemRow.querySelectorAll('.ord-date-row');
+  let total=0;
+  dateRows.forEach(r=>{ total+=parseFloat(r.querySelector('.f-od-qty').value)||0; });
+  const countEl=itemRow.querySelector('.f-oi-count');
+  if(pack) {
+    const size=parseFloat(pack.size)||0;
+    countEl.textContent=total+'/'+size+' tâmaras';
+    countEl.style.color=total===size?'var(--green)':total>size?'var(--red)':'var(--muted)';
+  } else {
+    countEl.textContent=total+' tâmaras';
+    countEl.style.color='var(--muted)';
+  }
+}
 
 function saveOrder(editId) {
   const rows=document.querySelectorAll('#f-ord-items .ord-item-row');
   const items=[];
   rows.forEach(r=>{
-    const flavorId=r.querySelector('.f-oi-flavor').value;
     const packId=r.querySelector('.f-oi-pack').value;
-    const flavor=(state.flavors||[]).find(f=>f.id===flavorId);
     const pack=(state.packs||[]).find(p=>p.id===packId);
-    if(!flavor||!pack) return;
-    const cost=packTotalCost(pack,flavor);
+    if(!pack) return;
+    const dateRows=r.querySelectorAll('.ord-date-row');
+    const dates=[];
+    let totalDateCost=0;
+    dateRows.forEach(dr=>{
+      const flavorId=dr.querySelector('.f-od-flavor').value;
+      const qty=parseFloat(dr.querySelector('.f-od-qty').value)||0;
+      const flavor=(state.flavors||[]).find(f=>f.id===flavorId);
+      if(!flavor||!qty) return;
+      dates.push({flavorId,flavorName:flavor.name,qty});
+      totalDateCost+=flavorUnitCost(flavor)*qty;
+    });
+    if(!dates.length) return;
+    const packSize=parseFloat(pack.size)||0;
+    const totalDates=dates.reduce((s,d)=>s+d.qty,0);
+    const unitCost=totalDateCost+(parseFloat(pack.packagingCost)||0)+(parseFloat(pack.deliveryCost)||0);
+    const productName=dates.map(d=>d.qty+'× '+d.flavorName).join(', ')+' — Pack '+packSize;
     items.push({
-      flavorId, packId, packSize:pack.size,
-      productName:flavor.name+' — Pack '+pack.size,
+      packId, packSize, dates,
+      productName,
       qty:parseFloat(r.querySelector('.f-oi-qty').value)||1,
       unitPrice:parseFloat(pack.salePrice)||0,
-      unitCost:cost
+      unitCost
     });
   });
   // Handle new customer inline
@@ -1068,10 +1144,18 @@ function viewOrder(id) {
       <div><div class="label">Cliente</div><div style="font-size:13px">${esc(cust?cust.name:'—')}</div></div>
     </div>
     <div class="label" style="margin-bottom:8px">Itens</div>
-    ${(o.items||[]).map(i=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
-      <span>${esc(i.productName||'—')} × ${i.qty}</span>
-      <span style="color:var(--muted)">${fmt(i.qty*i.unitPrice)}</span>
-    </div>`).join('')}
+    ${(o.items||[]).map(i=>{
+      const dates=i.dates||[];
+      const datesStr=dates.length?dates.map(d=>d.qty+'× '+(d.flavorName||'?')).join(', '):(i.productName||'—');
+      const packLabel=i.packSize?'Pack '+i.packSize:'';
+      return `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:500">${packLabel}${i.qty>1?' × '+i.qty:''}</span>
+          <span style="color:var(--muted)">${fmt(i.qty*i.unitPrice)}</span>
+        </div>
+        <div style="font-size:11px;color:var(--dim);margin-top:2px">${esc(datesStr)}</div>
+      </div>`;
+    }).join('')}
     <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:13px;font-weight:600">
       <span>Total</span><span>${fmt(rev)}</span>
     </div>
