@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773586741';
+var APP_V='t1773587501';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -342,6 +342,7 @@ const CHANNELS = ['Instagram','TikTok','WhatsApp','Website','Referência','Outro
 const ORDER_STATUSES = ['pendente','pago','em produção','enviado','entregue','cancelado'];
 const PAY_STATUSES = ['pendente','pago','parcial','reembolsado'];
 const INV_CATS = ['Tâmaras','Recheios','Embalagem','Rótulos','Outro'];
+const INV_UNITS = ['un','kg','g','L','ml'];
 
 const PACK_SIZES = [3, 6, 10];
 
@@ -629,7 +630,16 @@ function getCustomerStats(cId) {
   return { count:ords.length, total, first:dates[0]||'', last:dates[dates.length-1]||'' };
 }
 function invCurrentStock(item) { return (parseFloat(item.qtyReceived)||0)-(parseFloat(item.qtyUsed)||0)-(parseFloat(item.qtyWasted)||0); }
-function isLowStock(item) { return invCurrentStock(item)<(parseFloat(item.minStock)||0); }
+function invAutoMinStock(item) {
+  const used=parseFloat(item.qtyUsed)||0;
+  if(!used) return parseFloat(item.minStock)||0;
+  const orders=state.orders||[];
+  const firstOrd=orders.map(o=>o.date).filter(Boolean).sort()[0];
+  const weeks=firstOrd?Math.max(1,(Date.now()-new Date(firstOrd).getTime())/604800000):1;
+  const weeklyUsage=used/weeks;
+  return Math.ceil(weeklyUsage*2); // 2 weeks buffer
+}
+function isLowStock(item) { return invCurrentStock(item)<invAutoMinStock(item); }
 function statusBadge(status) {
   const map={'pendente':'pending','pago':'paid','em produção':'production','enviado':'shipped','entregue':'delivered','cancelado':'cancelled','parcial':'pending','reembolsado':'cancelled'};
   return '<span class="badge badge-'+(map[status]||'pending')+'">'+esc(status)+'</span>';
@@ -1250,46 +1260,74 @@ function renderInventory(el) {
     </table></div>`:'<div class="empty"><div class="icon">📋</div><p>Sem itens no inventário.</p></div>'}`;
 }
 
+function getInvSuppliers() {
+  const s=new Set();
+  (state.inventory||[]).forEach(i=>{ if(i.supplier) s.add(i.supplier); });
+  return [...s].sort();
+}
+
 function openInvModal(editId) {
   const i=editId?(state.inventory||[]).find(x=>x.id===editId):null;
+  const suppliers=getInvSuppliers();
   openModal(i?'Editar Item':'Novo Item de Inventário', `
     <div class="form-group"><label class="label">Nome do material</label><input class="input" id="f-inv-name" value="${esc(i?i.name:'')}"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group"><label class="label">Categoria</label><select class="input" id="f-inv-cat">${INV_CATS.map(c=>`<option ${i&&i.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
-      <div class="form-group"><label class="label">Unidade</label><input class="input" id="f-inv-unit" value="${esc(i?i.unit:'un')}" placeholder="kg, un, L..."></div>
+      <div class="form-group"><label class="label">Unidade</label><select class="input" id="f-inv-unit">${INV_UNITS.map(u=>`<option ${i&&i.unit===u?'selected':(!i&&u==='un'?'selected':'') }>${u}</option>`).join('')}</select></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label class="label">Fornecedor</label><input class="input" id="f-inv-supplier" value="${esc(i?i.supplier:'')}"></div>
-      <div class="form-group"><label class="label">Custo por un. (€)</label><input class="input" type="number" step="0.01" id="f-inv-cost" value="${i?i.costPerUnit:''}"></div>
+      <div class="form-group"><label class="label">Fornecedor</label><select class="input" id="f-inv-supplier">
+        ${suppliers.map(s=>`<option ${i&&i.supplier===s?'selected':''}>${esc(s)}</option>`).join('')}
+        <option value="__new">+ Novo fornecedor...</option>
+      </select></div>
+      <div class="form-group"><label class="label">Preço pago (€/un)</label><input class="input" type="number" step="0.01" id="f-inv-cost" value="${i?i.costPerUnit:''}" placeholder="Ex: 0.30"></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-      <div class="form-group"><label class="label">Recebido</label><input class="input" type="number" id="f-inv-received" value="${i?i.qtyReceived:'0'}"></div>
-      <div class="form-group"><label class="label">Usado</label><input class="input" type="number" id="f-inv-used" value="${i?i.qtyUsed:'0'}"></div>
-      <div class="form-group"><label class="label">Desperdiçado</label><input class="input" type="number" id="f-inv-wasted" value="${i?i.qtyWasted:'0'}"></div>
+    <div id="f-inv-new-supplier" style="display:none">
+      <div class="form-group"><label class="label">Nome do fornecedor</label><input class="input" id="f-inv-supplier-name" placeholder="Ex: Continente, Makro..."></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label class="label">Stock mínimo</label><input class="input" type="number" id="f-inv-min" value="${i?i.minStock:''}"></div>
-      <div class="form-group"><label class="label">Validade</label><input class="input" type="date" id="f-inv-exp" value="${i?i.expirationDate||'':''}"></div>
+    ${i?`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+      <div class="form-group"><label class="label">Recebido</label><input class="input" type="number" step="0.01" id="f-inv-received" value="${i.qtyReceived||0}"></div>
+      <div class="form-group"><label class="label">Usado</label><input class="input" type="number" step="0.01" id="f-inv-used" value="${i.qtyUsed||0}"></div>
+      <div class="form-group"><label class="label">Desperdiçado</label><input class="input" type="number" step="0.01" id="f-inv-wasted" value="${i.qtyWasted||0}"></div>
     </div>
+    <div class="form-group"><label class="label">Validade</label><input class="input" type="date" id="f-inv-exp" value="${i.expirationDate||''}"></div>`
+    :`<div class="form-group"><label class="label">Quantidade recebida</label><input class="input" type="number" step="0.01" id="f-inv-received" value="" placeholder="Quantas unidades/kg recebes agora?"></div>
+    <div class="form-group"><label class="label">Validade</label><input class="input" type="date" id="f-inv-exp" value=""></div>`}
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary btn-full" onclick="saveInv('${editId||''}')">${i?'Guardar':'Criar Item'}</button>
       ${i?`<button class="btn btn-ghost" onclick="delInv('${i.id}')" style="color:var(--red)">Eliminar</button>`:''}
     </div>
   `);
+  document.getElementById('f-inv-supplier').onchange=function(){
+    document.getElementById('f-inv-new-supplier').style.display=this.value==='__new'?'block':'none';
+  };
+  if(!i&&!suppliers.length) {
+    document.getElementById('f-inv-supplier').value='__new';
+    document.getElementById('f-inv-new-supplier').style.display='block';
+  }
 }
 
 function saveInv(editId) {
   const name=$('#f-inv-name').value.trim(); if(!name) return;
+  let supplier=$('#f-inv-supplier').value;
+  if(supplier==='__new') {
+    supplier=$('#f-inv-supplier-name').value.trim();
+  }
   const data={
-    name, category:$('#f-inv-cat').value, unit:$('#f-inv-unit').value.trim(),
-    supplier:$('#f-inv-supplier').value.trim(), costPerUnit:parseFloat($('#f-inv-cost').value)||0,
-    qtyReceived:parseFloat($('#f-inv-received').value)||0, qtyUsed:parseFloat($('#f-inv-used').value)||0,
-    qtyWasted:parseFloat($('#f-inv-wasted').value)||0, minStock:parseFloat($('#f-inv-min').value)||0,
+    name, category:$('#f-inv-cat').value, unit:$('#f-inv-unit').value,
+    supplier, costPerUnit:parseFloat($('#f-inv-cost').value)||0,
+    qtyReceived:parseFloat($('#f-inv-received').value)||0,
+    qtyUsed:editId?parseFloat($('#f-inv-used').value)||0:0,
+    qtyWasted:editId?parseFloat($('#f-inv-wasted').value)||0:0,
     expirationDate:$('#f-inv-exp').value||''
   };
   if(!state.inventory) state.inventory=[];
-  if(editId) { const i=state.inventory.find(x=>x.id===editId); if(i) Object.assign(i,data); }
-  else { data.id=uid(); data.createdAt=Date.now(); state.inventory.push(data); }
+  if(editId) {
+    const i=state.inventory.find(x=>x.id===editId);
+    if(i) { data.minStock=i.minStock||0; Object.assign(i,data); }
+  } else {
+    data.id=uid(); data.createdAt=Date.now(); data.minStock=0; state.inventory.push(data);
+  }
   save(); closeModal(); render();
 }
 function delInv(id) { state.inventory=(state.inventory||[]).filter(x=>x.id!==id); save(); closeModal(); render(); }
@@ -1908,7 +1946,8 @@ function renderAnalytics(el) {
     const weeklyUsage=(used+wasted)/weeks;
     const weeksLeft=weeklyUsage>0?stock/weeklyUsage:999;
     const wastePct=received>0?(wasted/received*100):0;
-    return {name:item.name,stock,unit:item.unit||'un',minStock:item.minStock||0,weeklyUsage:weeklyUsage,weeksLeft:weeksLeft,isLow:stock<(parseFloat(item.minStock)||0),wastePct,expiry:item.expirationDate||''};
+    const autoMin=invAutoMinStock(item);
+    return {name:item.name,stock,unit:item.unit||'un',minStock:autoMin,weeklyUsage:weeklyUsage,weeksLeft:weeksLeft,isLow:stock<autoMin,wastePct,expiry:item.expirationDate||''};
   }).sort((a,b)=>a.weeksLeft-b.weeksLeft);
 
   // ── 8. Sazonalidade ──
