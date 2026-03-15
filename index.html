@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773586277';
+var APP_V='t1773586403';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -1502,11 +1502,6 @@ function delInspiration(id) { state.inspiration=state.inspiration.filter(i=>i.id
 function renderFinances(el) {
   const items=(state.finances||[]).filter(i=>i.type==='saida');
   const totalDesp=items.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
-  // Lucro das encomendas
-  const orders=(state.orders||[]).filter(o=>o.status!=='cancelado');
-  const totalRev=orders.reduce((s,o)=>s+orderRevenue(o),0);
-  const totalCostOrd=orders.reduce((s,o)=>s+orderCost(o),0);
-  const lucroLiquido=totalRev-totalCostOrd-totalDesp;
 
   // Group by month
   const months={};
@@ -1523,8 +1518,6 @@ function renderFinances(el) {
     </div>
     <div class="fin-cards">
       <div class="card fin-card" style="border-left-color:var(--red)"><div class="fin-label" style="color:var(--red)">Total Despesas</div><div class="fin-value" style="color:var(--red)">${fmt(totalDesp)}</div></div>
-      <div class="card fin-card" style="border-left-color:var(--green)"><div class="fin-label" style="color:var(--green)">Receita Encomendas</div><div class="fin-value" style="color:var(--green)">${fmt(totalRev)}</div></div>
-      <div class="card fin-card" style="border-left-color:${lucroLiquido>=0?'var(--gold)':'var(--red)'}"><div class="fin-label" style="color:var(--gold)">Lucro Líquido</div><div class="fin-value" style="color:${lucroLiquido>=0?'var(--gold)':'var(--red)'}">${lucroLiquido>=0?'+':''}${fmt(lucroLiquido)}</div></div>
     </div>
     ${items.length?`<div class="card" style="padding:18px;margin-bottom:16px">
       <div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;font-weight:600">Por Mês</div>
