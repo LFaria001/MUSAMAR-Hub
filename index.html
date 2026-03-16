@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773587501';
+var APP_V='t1773646771';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -2268,37 +2268,44 @@ function getOrCreateFutureWeek(weekInfo) {
 }
 function checkWeekChange() {
   const cur = getWeekInfo();
-  if(state.weekEnd && state.weekEnd < cur.monISO && state.objectives.member1.goals.length + state.objectives.member2.goals.length > 0) {
-    // Week changed — auto-archive
-    if(!state.accountability) state.accountability=[];
-    ['member1','member2'].forEach(mk=>{
-      const m=state.objectives[mk];
-      const done=m.goals.filter(g=>g.done).length;
-      state.accountability.unshift({
-        member:m.name, week:state.weekLabel||'Sem nome',
-        done, total:m.goals.length, date:now(),
-        goals:m.goals.map(g=>({text:g.text,done:g.done,assignee:g.assignee||''}))
+  let changed = false;
+  if(state.weekEnd && state.weekEnd < cur.monISO) {
+    // Week changed — auto-archive if there were goals
+    if(state.objectives.member1.goals.length + state.objectives.member2.goals.length > 0) {
+      if(!state.accountability) state.accountability=[];
+      ['member1','member2'].forEach(mk=>{
+        const m=state.objectives[mk];
+        const done=m.goals.filter(g=>g.done).length;
+        state.accountability.unshift({
+          member:m.name, week:state.weekLabel||'Sem nome',
+          done, total:m.goals.length, date:now(),
+          goals:m.goals.map(g=>({text:g.text,done:g.done,assignee:g.assignee||''}))
+        });
       });
-    });
-    state.objectives.member1.goals=[];
-    state.objectives.member2.goals=[];
+      state.objectives.member1.goals=[];
+      state.objectives.member2.goals=[];
+    }
+    // Promote future week if it matches the new current week
+    if(!state.futureWeeks) state.futureWeeks=[];
+    const fw=state.futureWeeks.find(f=>f.monISO===cur.monISO);
+    if(fw) {
+      ['member1','member2'].forEach(mk=>{
+        if(fw[mk]&&fw[mk].goals&&fw[mk].goals.length) {
+          fw[mk].goals.forEach(g=>state.objectives[mk].goals.push(g));
+        }
+      });
+      state.futureWeeks=state.futureWeeks.filter(f=>f.monISO!==cur.monISO);
+    }
+    // Clean up past future weeks
+    state.futureWeeks=state.futureWeeks.filter(f=>f.monISO>=cur.monISO);
+    changed = true;
   }
-  // Promote future week if it matches the new current week
-  if(!state.futureWeeks) state.futureWeeks=[];
-  const fw=state.futureWeeks.find(f=>f.monISO===cur.monISO);
-  if(fw) {
-    // Merge future goals into current (append, don't replace if current already has goals)
-    ['member1','member2'].forEach(mk=>{
-      if(fw[mk]&&fw[mk].goals&&fw[mk].goals.length) {
-        fw[mk].goals.forEach(g=>state.objectives[mk].goals.push(g));
-      }
-    });
-    state.futureWeeks=state.futureWeeks.filter(f=>f.monISO!==cur.monISO);
+  if(state.weekLabel !== cur.label || state.weekEnd !== cur.sunISO) {
+    state.weekLabel = cur.label;
+    state.weekEnd = cur.sunISO;
+    changed = true;
   }
-  // Clean up past future weeks
-  state.futureWeeks=state.futureWeeks.filter(f=>f.monISO>=cur.monISO);
-  state.weekLabel = cur.label;
-  state.weekEnd = cur.sunISO;
+  if(changed) save();
 }
 function renderAccGoals(goals) {
   if(!goals||!goals.length) return '';
