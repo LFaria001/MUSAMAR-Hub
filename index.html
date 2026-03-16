@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773684469';
+var APP_V='t1773694130';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -269,6 +269,9 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 
   /* KPI grid */
   .kpi-grid { grid-template-columns: repeat(4, 1fr) !important; }
+
+  /* Calendar compact on desktop */
+  .cal-cell { aspect-ratio: auto !important; padding: 10px 0; }
 
   /* Cards hover effect */
   .card:hover { border-color: var(--dim); }
@@ -2532,13 +2535,13 @@ function renderCalendar(el) {
 
   // Build calendar grid
   let cells='';
-  for(let i=0;i<startDay;i++) cells+='<div style="aspect-ratio:1"></div>';
+  for(let i=0;i<startDay;i++) cells+='<div class="cal-cell" style="aspect-ratio:1"></div>';
   for(let d=1;d<=daysInMonth;d++){
     const ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
     const isToday=ds===todayStr;
     const dayEvents=events.filter(e=>e.date===ds);
     const dots=dayEvents.length?'<div style="display:flex;gap:2px;justify-content:center;margin-top:2px">'+dayEvents.slice(0,3).map(()=>'<span style="width:4px;height:4px;border-radius:50%;background:var(--gold)"></span>').join('')+'</div>':'';
-    cells+=`<div onclick="showDayEvents('${ds}')" style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;border-radius:8px;border:${isToday?'1.5px solid var(--gold)':'1px solid transparent'};background:${isToday?'rgba(77,44,20,0.1)':'transparent'}">
+    cells+=`<div class="cal-cell" onclick="showDayEvents('${ds}')" style="aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;border-radius:8px;border:${isToday?'1.5px solid var(--gold)':'1px solid transparent'};background:${isToday?'rgba(77,44,20,0.1)':'transparent'}">
       <span style="font-size:13px;color:${isToday?'var(--gold)':'var(--text)'};font-weight:${isToday?'600':'400'}">${d}</span>
       ${dots}
     </div>`;
