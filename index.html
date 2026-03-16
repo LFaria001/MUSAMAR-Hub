@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773683894';
+var APP_V='t1773684080';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -22,14 +22,14 @@ fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.
 <title>Musamar Hub</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
   --bg: #faebd6; --bg2: #f3e0c8; --card: #fff5e8; --border: #e0cdb5;
   --gold: #4d2c14; --gold-dark: #3a1f0b; --text: #3a1f0b; --muted: #7a5c3e;
   --dim: #9a8268; --faint: #e8d5bc; --green: #3a7d4a; --red: #a83232;
-  --font-display: 'Cormorant Garamond', serif;
+  --font-display: 'Playfair Display', serif;
   --font-body: 'DM Sans', sans-serif;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
