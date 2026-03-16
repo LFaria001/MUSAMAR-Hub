@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773647041';
+var APP_V='t1773647326';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -2359,7 +2359,7 @@ function renderObjectives(el) {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${!isCurrent?`<button class="btn btn-ghost" onclick="viewWeekOffset=0;render()">← Semana atual</button>`:''}
-        ${isCurrent?`<button class="btn btn-ghost" onclick="openAccountability()">📝 Accountability</button>`:''}
+
         ${futureCount?`<button class="btn btn-ghost" style="position:relative" onclick="viewWeekOffset=1;render()">📅 Planeadas <span style="background:var(--gold);color:var(--bg);font-size:9px;padding:2px 5px;border-radius:8px;margin-left:4px">${futureCount}</span></button>`:''}
       </div>
     </div>
@@ -2464,35 +2464,6 @@ function delFutureGoal(monISO, member, id) {
   save(); render();
 }
 
-function openAccountability() {
-  const hasGoals = state.objectives.member1.goals.length + state.objectives.member2.goals.length > 0;
-  openModal('Accountability — '+esc(state.weekLabel), `
-    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Reflete sobre o que correu bem e o que pode melhorar esta semana.</p>
-    ${['member1','member2'].map(mk=>{
-      const m=state.objectives[mk];
-      const done=m.goals.filter(g=>g.done).length;
-      return `<div class="form-group">
-        <label class="label">${esc(m.name)} (${done}/${m.goals.length} concluídos)</label>
-        <textarea class="input" id="f-acc-${mk}" placeholder="O que correu bem? O que melhorar?"></textarea>
-      </div>`;
-    }).join('')}
-    <button class="btn btn-primary btn-full" onclick="saveAccountability()">Guardar Reflexão</button>
-  `);
-}
-function saveAccountability() {
-  if(!state.accountability) state.accountability=[];
-  ['member1','member2'].forEach(mk=>{
-    const m=state.objectives[mk];
-    const done=m.goals.filter(g=>g.done).length;
-    const reflection=$('#f-acc-'+mk).value.trim();
-    state.accountability.unshift({
-      member:m.name, week:state.weekLabel||'Sem nome',
-      done, total:m.goals.length, reflection, date:now(),
-      goals:m.goals.map(g=>({text:g.text,done:g.done,assignee:g.assignee||''}))
-    });
-  });
-  save(); closeModal(); render();
-}
 
 // ===== 7. CALENDÁRIO =====
 let calViewDate = new Date();
