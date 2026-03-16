@@ -2,7 +2,8 @@
   "name": "Musamar Hub",
   "short_name": "Musamar",
   "description": "Business Hub — Tâmaras Recheadas",
-  "start_url": "./index.html",
+  "start_url": ".",
+  "scope": ".",
   "display": "standalone",
   "background_color": "#faebd6",
   "theme_color": "#4d2c14",
@@ -12,7 +13,7 @@
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
   ],
   "share_target": {
-    "action": "/index.html",
+    "action": "./index.html",
     "method": "GET",
     "params": {
       "title": "share_title",
