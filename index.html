@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773684080';
+var APP_V='t1773684318';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -235,12 +235,56 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   .header { display: none; }
   .sidebar { display: flex; }
   .bottom-nav { display: none; }
-  .main { padding: 32px 36px; padding-bottom: calc(32px + var(--safe-bottom)); }
+  .main { padding: 40px 48px; padding-bottom: calc(40px + var(--safe-bottom)); max-width: 1200px; }
   .section-header h1 { font-size: 32px; }
   .chat-wrap { flex: 1; min-height: 0; }
   .fin-card .fin-value { font-size: 26px; }
   .req-row, .req-header { grid-template-columns: 1.5fr 1fr 0.8fr 2fr; }
   .req-row span:nth-child(4), .req-header span:nth-child(4) { grid-column: auto; }
+
+  /* Sidebar wider */
+  .sidebar { width: 260px; min-width: 260px; }
+  .nav-btn { padding: 14px 28px; font-size: 14px; }
+  .nav-btn:hover { background: rgba(77,44,20,0.08); color: var(--gold); }
+
+  /* Cards grid */
+  .grid-cards { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+
+  /* Dashboard */
+  .dash-greeting { font-size: 36px; }
+  .dash-summary { padding: 28px; }
+  .dash-items { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+  .dash-item { border-right: 1px solid var(--border); padding: 14px 16px; }
+  .dash-item:nth-child(2n) { border-right: none; }
+
+  /* Objectives grid side by side */
+  .obj-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+  /* Modal wider on desktop */
+  .modal { max-width: 560px; padding: 36px; }
+
+  /* Tables */
+  .data-table { font-size: 13px; }
+  .data-table th, .data-table td { padding: 12px 16px; }
+
+  /* KPI grid */
+  .kpi-grid { grid-template-columns: repeat(4, 1fr) !important; }
+
+  /* Cards hover effect */
+  .card:hover { border-color: var(--dim); }
+
+  /* Buttons hover */
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-ghost:hover { background: rgba(77,44,20,0.14); }
+
+  /* Inputs larger */
+  .input { padding: 12px 16px; font-size: 14px; }
+
+  /* Scrollbar styling */
+  .main::-webkit-scrollbar { width: 6px; }
+  .main::-webkit-scrollbar-track { background: transparent; }
+  .main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .main::-webkit-scrollbar-thumb:hover { background: var(--dim); }
 }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
