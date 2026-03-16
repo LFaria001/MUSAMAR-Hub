@@ -2,7 +2,7 @@
   "name": "Musamar Hub",
   "short_name": "Musamar",
   "description": "Business Hub — Tâmaras Recheadas",
-  "start_url": "/index.html",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#faebd6",
   "theme_color": "#4d2c14",
