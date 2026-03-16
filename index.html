@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773646771';
+var APP_V='t1773646884';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -2270,21 +2270,24 @@ function checkWeekChange() {
   const cur = getWeekInfo();
   let changed = false;
   if(state.weekEnd && state.weekEnd < cur.monISO) {
-    // Week changed — auto-archive if there were goals
-    if(state.objectives.member1.goals.length + state.objectives.member2.goals.length > 0) {
-      if(!state.accountability) state.accountability=[];
-      ['member1','member2'].forEach(mk=>{
-        const m=state.objectives[mk];
+    if(!state.accountability) state.accountability=[];
+    // Archive ALL goals (done and undone) to history
+    ['member1','member2'].forEach(mk=>{
+      const m=state.objectives[mk];
+      if(m.goals.length) {
         const done=m.goals.filter(g=>g.done).length;
         state.accountability.unshift({
           member:m.name, week:state.weekLabel||'Sem nome',
           done, total:m.goals.length, date:now(),
           goals:m.goals.map(g=>({text:g.text,done:g.done,assignee:g.assignee||''}))
         });
-      });
-      state.objectives.member1.goals=[];
-      state.objectives.member2.goals=[];
-    }
+      }
+    });
+    // Carry over undone goals to current week
+    const carryOver1 = state.objectives.member1.goals.filter(g=>!g.done);
+    const carryOver2 = state.objectives.member2.goals.filter(g=>!g.done);
+    state.objectives.member1.goals = carryOver1;
+    state.objectives.member2.goals = carryOver2;
     // Promote future week if it matches the new current week
     if(!state.futureWeeks) state.futureWeeks=[];
     const fw=state.futureWeeks.find(f=>f.monISO===cur.monISO);
