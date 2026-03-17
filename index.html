@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773782804';
+var APP_V='t1773782929';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -2634,7 +2634,8 @@ function addEvent() {
 function delEvent(id) { state.calendar=state.calendar.filter(e=>e.id!==id); save(); render(); }
 
 // ===== 9. NOTAS =====
-const NOTE_SECTIONS = ['Geral','Marketing','Claude','Inspiração','Brand'];
+const DEFAULT_NOTE_SECTIONS = ['Geral','Marketing','Claude','Inspiração','Brand'];
+function getNoteSections() { return state.noteSections||DEFAULT_NOTE_SECTIONS; }
 let activeNoteSection = 'Geral';
 
 function renderNoteCard(n) {
@@ -2675,7 +2676,10 @@ function renderNotes(el) {
       <div><h1>Notas</h1><div class="sub">Notas, inspiração e brand</div></div>
       ${addBtn}
     </div>
-    <div class="chip-group" style="margin-bottom:16px">${NOTE_SECTIONS.map(s=>`<button class="chip ${s===activeNoteSection?'active':''}" onclick="activeNoteSection='${s}';render()">${s}</button>`).join('')}</div>
+    <div class="chip-group" style="margin-bottom:16px">${getNoteSections().map(s=>`<button class="chip ${s===activeNoteSection?'active':''}" onclick="activeNoteSection='${s}';render()">${s}</button>`).join('')}
+      <button class="chip" onclick="addNoteSection()" style="opacity:0.5">+</button>
+      <button class="chip" onclick="removeNoteSection()" style="opacity:0.5;color:var(--red)">−</button>
+    </div>
     ${sectionContent}
     ${filtered.length?`<div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin:${sectionContent?'20':'0'}px 0 10px;font-weight:600">${sectionContent?'Notas':''}${!sectionContent?'':''}</div>`:''}
     ${filtered.length?filtered.slice().reverse().map(n=>renderNoteCard(n)).join(''):(sectionContent?'':'<div class="empty"><div class="icon">📝</div><p>Sem notas em ${esc(activeNoteSection)}. Cria a primeira!</p></div>')}`;
@@ -2717,7 +2721,7 @@ function openNoteModal(editId) {
   const title=existing?'Editar Nota':'Nova Nota';
   const curSection=existing?(existing.section||'Geral'):activeNoteSection;
   openModal(title, `
-    <div class="form-group"><label class="label">Secção</label><div class="chip-group" id="note-section-chips">${NOTE_SECTIONS.map(s=>`<button class="chip ${s===curSection?'active':''}" onclick="pickChip(this)" data-val="${s}">${s}</button>`).join('')}</div></div>
+    <div class="form-group"><label class="label">Secção</label><div class="chip-group" id="note-section-chips">${getNoteSections().map(s=>`<button class="chip ${s===curSection?'active':''}" onclick="pickChip(this)" data-val="${s}">${s}</button>`).join('')}</div></div>
     <div class="form-group"><label class="label">Título</label><input class="input" id="f-note-title" placeholder="Título da nota..." value="${esc(existing?existing.title:'')}"></div>
     <div class="form-group"><label class="label">Conteúdo</label><textarea class="input" id="f-note-body" rows="8" style="min-height:160px;resize:vertical" placeholder="Escreve aqui...">${esc(existing?existing.body:'')}</textarea></div>
     <div style="display:flex;gap:8px">
@@ -2744,6 +2748,36 @@ function saveNote(editId) {
 }
 
 function delNote(id) { state.notes=(state.notes||[]).filter(n=>n.id!==id); save(); render(); }
+
+function addNoteSection() {
+  const name=prompt('Nome da nova label:');
+  if(!name||!name.trim()) return;
+  const sections=getNoteSections().slice();
+  if(sections.includes(name.trim())) { alert('Esta label já existe.'); return; }
+  sections.push(name.trim());
+  state.noteSections=sections;
+  activeNoteSection=name.trim();
+  save(); render();
+}
+
+function removeNoteSection() {
+  const sections=getNoteSections();
+  if(sections.length<=1) { alert('Tens de ter pelo menos 1 label.'); return; }
+  const name=prompt('Nome da label a eliminar:\n\nLabels atuais: '+sections.join(', '));
+  if(!name||!name.trim()) return;
+  const idx=sections.indexOf(name.trim());
+  if(idx===-1) { alert('Label não encontrada.'); return; }
+  const notesInSection=(state.notes||[]).filter(n=>(n.section||'Geral')===name.trim());
+  const msg=notesInSection.length
+    ? 'Eliminar label "'+name.trim()+'"? Tem '+notesInSection.length+' nota(s) que serão movidas para "Geral".'
+    : 'Eliminar label "'+name.trim()+'"?';
+  if(!confirm(msg)) return;
+  if(notesInSection.length) notesInSection.forEach(n=>{ n.section='Geral'; });
+  const newSections=sections.slice(); newSections.splice(idx,1);
+  state.noteSections=newSections;
+  if(activeNoteSection===name.trim()) activeNoteSection=newSections[0]||'Geral';
+  save(); render();
+}
 
 // Event notification checker
 function checkEventNotifications() {
