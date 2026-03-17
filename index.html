@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773694130';
+var APP_V='t1773781787';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -660,7 +660,7 @@ function render() {
 }
 
 // ===== BUSINESS HELPERS =====
-function flavorUnitCost(f) { return (parseFloat(f.dateCost)||0)+(parseFloat(f.fillingCost)||0); }
+function flavorUnitCost(f) { return (parseFloat(f.dateCost)||0)+(parseFloat(f.fillingCost)||0)+(parseFloat(f.toppingCost)||0); }
 function packTotalCost(pack, flavor) {
   const unitCost=flavorUnitCost(flavor);
   return unitCost*(parseFloat(pack.size)||0)+(parseFloat(pack.packagingCost)||0);
@@ -839,7 +839,7 @@ function renderProducts(el) {
             <div style="font-weight:500">${esc(f.name)}</div>
             <div style="font-weight:600">${fmt(uc)}<span style="font-size:10px;color:var(--muted)">/un</span></div>
           </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">Tâmara ${fmt(f.dateCost)} · Recheio ${fmt(f.fillingCost)}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Tâmara ${fmt(f.dateCost)} · Recheio ${fmt(f.fillingCost)} · Topping ${fmt(f.toppingCost||0)}</div>
           ${recipeStr?`<div style="font-size:10px;color:var(--dim);margin-top:3px;word-break:break-word">${recipeStr}</div>`:''}
         </div>`;
       }).join('')}</div>`:''}
@@ -863,9 +863,10 @@ function openFlavorModal(editId) {
   const recipe=f?(f.recipe||[]):[];
   openModal(f?'Editar Sabor':'Novo Sabor', `
     <div class="form-group"><label class="label">Nome do sabor</label><input class="input" id="f-flav-name" value="${esc(f?f.name:'')}" placeholder="Ex: Pistáchio, Amendoim, Nutella..."></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label class="label">Custo tâmara (€/un)</label><input class="input" type="number" step="0.01" id="f-flav-date" value="${f?f.dateCost:''}" placeholder="Custo de 1 tâmara"></div>
-      <div class="form-group"><label class="label">Custo recheio (€/un)</label><input class="input" type="number" step="0.01" id="f-flav-filling" value="${f?f.fillingCost:''}" placeholder="Custo recheio por 1 tâmara"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+      <div class="form-group"><label class="label">Tâmara (€/un)</label><input class="input" type="number" step="0.01" id="f-flav-date" value="${f?f.dateCost:''}" placeholder="Custo tâmara"></div>
+      <div class="form-group"><label class="label">Recheio (€/un)</label><input class="input" type="number" step="0.01" id="f-flav-filling" value="${f?f.fillingCost:''}" placeholder="Custo recheio"></div>
+      <div class="form-group"><label class="label">Topping (€/un)</label><input class="input" type="number" step="0.01" id="f-flav-topping" value="${f?f.toppingCost:''}" placeholder="Custo topping"></div>
     </div>
     <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;font-weight:600">Receita por 1 tâmara</div>
     <div id="f-flav-recipe">${recipe.map((r,i)=>recipeIngRow(r,inv)).join('')}</div>
@@ -907,7 +908,7 @@ function saveFlavor(editId) {
     const unit=r.querySelector('.f-ri-unit').value.trim();
     if(invId&&qty>0) recipe.push({inventoryId:invId,qty,unit});
   });
-  const data={ name, dateCost:parseFloat($('#f-flav-date').value)||0, fillingCost:parseFloat($('#f-flav-filling').value)||0, recipe };
+  const data={ name, dateCost:parseFloat($('#f-flav-date').value)||0, fillingCost:parseFloat($('#f-flav-filling').value)||0, toppingCost:parseFloat($('#f-flav-topping').value)||0, recipe };
   if(!state.flavors) state.flavors=[];
   if(editId) { const f=state.flavors.find(x=>x.id===editId); if(f) Object.assign(f,data); }
   else { data.id=uid(); state.flavors.push(data); }
