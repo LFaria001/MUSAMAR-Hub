@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773781787';
+var APP_V='t1773782804';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -2647,7 +2647,7 @@ function renderNoteCard(n) {
         <div style="font-size:12px;color:var(--muted);white-space:pre-wrap">${esc(n.body||'')}</div>
         ${dateStr?`<div style="font-size:10px;color:var(--dim);margin-top:6px">${dateStr} · ${esc(n.author||'')}</div>`:''}
       </div>
-      <button class="del-btn" onclick="event.stopPropagation();delNote('${n.id}')">✕</button>
+      <button class="del-btn" onclick="event.stopPropagation();if(confirm('Eliminar esta nota?'))delNote('${n.id}')">✕</button>
     </div>
   </div>`;
 }
@@ -2722,7 +2722,7 @@ function openNoteModal(editId) {
     <div class="form-group"><label class="label">Conteúdo</label><textarea class="input" id="f-note-body" rows="8" style="min-height:160px;resize:vertical" placeholder="Escreve aqui...">${esc(existing?existing.body:'')}</textarea></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary btn-full" onclick="saveNote('${editId||''}')">${existing?'Guardar':'Criar Nota'}</button>
-      ${existing?`<button class="btn btn-ghost" onclick="delNote('${existing.id}');closeModal()" style="color:var(--red)">Eliminar</button>`:''}
+      ${existing?`<button class="btn btn-ghost" onclick="if(confirm('Eliminar esta nota?')){delNote('${existing.id}');closeModal()}" style="color:var(--red)">Eliminar</button>`:''}
     </div>
   `);
   setTimeout(()=>$('#f-note-title')?.focus(),100);
