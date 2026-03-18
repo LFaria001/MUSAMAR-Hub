@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773826564';
+var APP_V='t1773826777';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -863,10 +863,33 @@ function openFlavorModal(editId) {
   const recipe=f?(f.recipe||[]):[];
   openModal(f?'Editar Sabor':'Novo Sabor', `
     <div class="form-group"><label class="label">Nome do sabor</label><input class="input" id="f-flav-name" value="${esc(f?f.name:'')}" placeholder="Ex: Pistáchio, Amendoim, Nutella..."></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-      <div class="form-group"><label class="label">Tâmara (€/un)</label><input class="input" type="number" step="0.01" id="f-flav-date" value="${f?f.dateCost:''}" placeholder="Custo tâmara"></div>
-      <div class="form-group"><label class="label">Recheio (€/un)</label><input class="input" type="number" step="0.01" id="f-flav-filling" value="${f?f.fillingCost:''}" placeholder="Custo recheio"></div>
-      <div class="form-group"><label class="label">Topping (€/un)</label><input class="input" type="number" step="0.01" id="f-flav-topping" value="${f?f.toppingCost:''}" placeholder="Custo topping"></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${['date','filling','topping'].map((key,ki)=>{
+        const labels=['Tâmara','Recheio','Topping'];
+        const vals=[f?f.dateCost:'',f?f.fillingCost:'',f?f.toppingCost:''];
+        const gKeys=['dateGrams','fillingGrams','toppingGrams'];
+        const iKeys=['dateInvId','fillingInvId','toppingInvId'];
+        const defGrams=[30,15,5];
+        const catFilter=ki===0?'Tâmaras':ki===1?'Recheios':'';
+        const filteredInv=catFilter?inv.filter(x=>x.category===catFilter):inv;
+        const savedInvId=f?f[iKeys[ki]]:'';
+        const savedGrams=f&&f[gKeys[ki]]?f[gKeys[ki]]:defGrams[ki];
+        return `<div class="card" style="padding:10px 12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <span style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;font-weight:600">${labels[ki]}</span>
+            <span id="f-flav-${key}-calc" style="font-size:10px;color:var(--dim)"></span>
+          </div>
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;align-items:end">
+            <div class="form-group" style="margin:0"><label class="label">Ingrediente</label><select class="input f-cost-inv" data-key="${key}" onchange="calcCostFromInv('${key}')">
+              <option value="">Manual</option>
+              ${filteredInv.map(i=>`<option value="${i.id}" ${savedInvId===i.id?'selected':''}>${esc(i.name)} (${i.costPerUnit?fmt(i.costPerUnit)+'/'+esc(i.unit||'un'):'sem preço'})</option>`).join('')}
+              ${!catFilter?'':inv.filter(x=>x.category!==catFilter).map(i=>`<option value="${i.id}" ${savedInvId===i.id?'selected':''}>${esc(i.name)} (${i.costPerUnit?fmt(i.costPerUnit)+'/'+esc(i.unit||'un'):'sem preço'})</option>`).join('')}
+            </select></div>
+            <div class="form-group" style="margin:0"><label class="label">g/tâmara</label><input class="input f-cost-grams" data-key="${key}" type="number" step="1" value="${savedGrams}" onchange="calcCostFromInv('${key}')"></div>
+            <div class="form-group" style="margin:0"><label class="label">€/un</label><input class="input" type="number" step="0.01" id="f-flav-${key}" value="${vals[ki]}" placeholder="0.00"></div>
+          </div>
+        </div>`;
+      }).join('')}
     </div>
     <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;font-weight:600">Receita por 1 tâmara</div>
     <div id="f-flav-recipe">${recipe.map((r,i)=>recipeIngRow(r,inv)).join('')}</div>
@@ -876,6 +899,28 @@ function openFlavorModal(editId) {
       ${f?`<button class="btn btn-ghost" onclick="delFlavor('${f.id}')" style="color:var(--red)">Eliminar</button>`:''}
     </div>
   `);
+  // Auto-show calc labels for pre-linked items
+  setTimeout(()=>{ ['date','filling','topping'].forEach(k=>calcCostFromInv(k)); },50);
+}
+
+function calcCostFromInv(key) {
+  const sel=document.querySelector(`.f-cost-inv[data-key="${key}"]`);
+  const gramsInput=document.querySelector(`.f-cost-grams[data-key="${key}"]`);
+  const costInput=document.getElementById('f-flav-'+key);
+  const calcLabel=document.getElementById('f-flav-'+key+'-calc');
+  if(!sel||!sel.value) { if(calcLabel) calcLabel.textContent=''; return; }
+  const inv=(state.inventory||[]).find(i=>i.id===sel.value);
+  if(!inv||!inv.costPerUnit) { if(calcLabel) calcLabel.textContent='sem preço no inventário'; return; }
+  const grams=parseFloat(gramsInput.value)||0;
+  const unit=(inv.unit||'un').toLowerCase();
+  let cost=0;
+  if(unit==='kg') cost=inv.costPerUnit*(grams/1000);
+  else if(unit==='g') cost=inv.costPerUnit*grams;
+  else if(unit==='l') cost=inv.costPerUnit*(grams/1000);
+  else if(unit==='ml') cost=inv.costPerUnit*grams;
+  else cost=inv.costPerUnit*grams;
+  costInput.value=cost.toFixed(3);
+  if(calcLabel) calcLabel.textContent=`${fmt(inv.costPerUnit)}/${inv.unit} × ${grams}g = ${fmt(cost)}`;
 }
 
 function recipeIngRow(r,inv) {
@@ -908,7 +953,13 @@ function saveFlavor(editId) {
     const unit=r.querySelector('.f-ri-unit').value.trim();
     if(invId&&qty>0) recipe.push({inventoryId:invId,qty,unit});
   });
-  const data={ name, dateCost:parseFloat($('#f-flav-date').value)||0, fillingCost:parseFloat($('#f-flav-filling').value)||0, toppingCost:parseFloat($('#f-flav-topping').value)||0, recipe };
+  const getInvLink=(key)=>{
+    const sel=document.querySelector(`.f-cost-inv[data-key="${key}"]`);
+    const gr=document.querySelector(`.f-cost-grams[data-key="${key}"]`);
+    return { invId:sel?sel.value:'', grams:gr?parseFloat(gr.value)||0:0 };
+  };
+  const dl=getInvLink('date'), fl=getInvLink('filling'), tl=getInvLink('topping');
+  const data={ name, dateCost:parseFloat($('#f-flav-date').value)||0, fillingCost:parseFloat($('#f-flav-filling').value)||0, toppingCost:parseFloat($('#f-flav-topping').value)||0, dateInvId:dl.invId, dateGrams:dl.grams, fillingInvId:fl.invId, fillingGrams:fl.grams, toppingInvId:tl.invId, toppingGrams:tl.grams, recipe };
   if(!state.flavors) state.flavors=[];
   if(editId) { const f=state.flavors.find(x=>x.id===editId); if(f) Object.assign(f,data); }
   else { data.id=uid(); state.flavors.push(data); }
