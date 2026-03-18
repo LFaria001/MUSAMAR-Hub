@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773818591';
+var APP_V='t1773824303';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -1399,7 +1399,9 @@ function startReceiptScan() {
       const data=await resp.json();
       if(!resp.ok||!data.items) {
         closeModal();
-        openModal('Erro', `<div style="text-align:center;padding:20px"><div style="font-size:14px;color:var(--red);margin-bottom:8px">Não foi possível ler o recibo</div><div style="font-size:12px;color:var(--muted)">${esc(data.error||data.message||'Tenta com uma foto mais nítida')}</div><button class="btn btn-ghost btn-full" style="margin-top:16px" onclick="closeModal()">Fechar</button></div>`);
+        const errDetail = data.error||data.message||'Tenta com uma foto mais nítida';
+        const rawDetail = data.raw ? `<div style="font-size:10px;color:var(--dim);margin-top:8px;max-height:80px;overflow:auto;text-align:left;background:var(--bg);padding:6px;border-radius:4px">${esc(data.raw)}</div>` : '';
+        openModal('Erro', `<div style="text-align:center;padding:20px"><div style="font-size:14px;color:var(--red);margin-bottom:8px">Não foi possível ler o recibo</div><div style="font-size:12px;color:var(--muted)">${esc(errDetail)}</div>${rawDetail}<button class="btn btn-ghost btn-full" style="margin-top:16px" onclick="closeModal()">Fechar</button></div>`);
         return;
       }
       previewReceiptItems(data.items);
