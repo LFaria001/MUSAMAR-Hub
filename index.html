@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773782929';
+var APP_V='t1773818194';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -1651,15 +1651,37 @@ function openBrandModal() {
   openModal('Novo Brand Asset', `
     <div class="form-group"><label class="label">Nome</label><input class="input" id="f-ba-name" placeholder="Ex: Logo Instagram v2"></div>
     <div class="form-group"><label class="label">Tipo</label><div class="chip-group">${types.map((t,i)=>`<button class="chip ${i===0?'active':''}" onclick="pickChip(this)" data-val="${t}">${t}</button>`).join('')}</div></div>
-    <div class="form-group"><label class="label">URL da imagem</label><input class="input" id="f-ba-url" placeholder="https://..."></div>
+    <div class="form-group"><label class="label">Imagem</label>
+      <div id="ba-upload-area" style="border:2px dashed var(--border);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg2)" onclick="document.getElementById('f-ba-file').click()">
+        <div id="ba-preview" style="display:none;margin-bottom:10px"><img id="ba-preview-img" style="max-width:100%;max-height:160px;border-radius:6px;object-fit:contain"></div>
+        <div id="ba-upload-text" style="color:var(--muted);font-size:12px">Clica para escolher um ficheiro<br><span style="font-size:10px;color:var(--dim)">PNG, JPG, SVG, WebP</span></div>
+        <input type="file" id="f-ba-file" accept="image/*" style="display:none" onchange="previewBrandFile(this)">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px"><span style="font-size:10px;color:var(--dim)">ou URL:</span><input class="input" id="f-ba-url" placeholder="https://..." style="flex:1"></div>
+    </div>
     <div class="form-group"><label class="label">Notas</label><textarea class="input" id="f-ba-notes" placeholder="Detalhes, contexto de uso..."></textarea></div>
     <button class="btn btn-primary btn-full" onclick="addBrand()">Guardar Asset</button>
   `);
 }
+let _brandFileData = '';
+function previewBrandFile(input) {
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _brandFileData = e.target.result;
+    $('#ba-preview-img').src = _brandFileData;
+    $('#ba-preview').style.display = 'block';
+    $('#ba-upload-text').innerHTML = `<span style="color:var(--green)">✓ ${file.name}</span><br><span style="font-size:10px;color:var(--dim)">Clica para trocar</span>`;
+    $('#f-ba-url').value = '';
+  };
+  reader.readAsDataURL(file);
+}
 function addBrand() {
   const n=$('#f-ba-name').value.trim(); if(!n) return;
   const type=$('#modal-content').querySelector('.chip.active')?.dataset.val||'Outro';
-  state.brandAssets.unshift({ id:uid(), name:n, type, url:$('#f-ba-url').value.trim(), notes:$('#f-ba-notes').value.trim(), date:now() });
+  const url = _brandFileData || $('#f-ba-url').value.trim();
+  state.brandAssets.unshift({ id:uid(), name:n, type, url, notes:$('#f-ba-notes').value.trim(), date:now() });
+  _brandFileData = '';
   save(); closeModal(); render();
 }
 function delBrand(id) { state.brandAssets=state.brandAssets.filter(i=>i.id!==id); save(); render(); }
