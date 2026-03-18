@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773818194';
+var APP_V='t1773818421';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -416,7 +416,7 @@ const CLOUDINARY_UPLOAD_URL = 'https://api.cloudinary.com/v1_1/di4ee9gm1/auto/up
 
 // Load from localStorage first (instant display)
 function loadLocal() { try { const d = localStorage.getItem('musamar-hub'); if(d) { const p = JSON.parse(d); Object.assign(state, p); } } catch(e){} }
-function saveLocal() { try { localStorage.setItem('musamar-hub', JSON.stringify(state)); } catch(e){} }
+function saveLocal() { localStorage.setItem('musamar-hub', JSON.stringify(state)); }
 loadLocal();
 
 // Migrate: remove old base64 photo data from chat messages (too large for Firestore)
@@ -1664,17 +1664,44 @@ function openBrandModal() {
   `);
 }
 let _brandFileData = '';
-function previewBrandFile(input) {
+function compressImage(file, maxW=800, quality=0.8) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      let w=img.width, h=img.height;
+      if(w>maxW){ h=Math.round(h*(maxW/w)); w=maxW; }
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      resolve(c.toDataURL('image/webp', quality));
+    };
+    img.onerror = () => resolve(null);
+    img.src = URL.createObjectURL(file);
+  });
+}
+async function previewBrandFile(input) {
   const file = input.files[0]; if(!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    _brandFileData = e.target.result;
+  $('#ba-upload-text').innerHTML = `<span style="color:var(--muted)">A processar...</span>`;
+  // SVGs are kept as-is (small), raster images get compressed
+  if(file.type === 'image/svg+xml') {
+    const reader = new FileReader();
+    reader.onload = e => {
+      _brandFileData = e.target.result;
+      $('#ba-preview-img').src = _brandFileData;
+      $('#ba-preview').style.display = 'block';
+      $('#ba-upload-text').innerHTML = `<span style="color:var(--green)">✓ ${file.name}</span><br><span style="font-size:10px;color:var(--dim)">Clica para trocar</span>`;
+      $('#f-ba-url').value = '';
+    };
+    reader.readAsDataURL(file);
+  } else {
+    const compressed = await compressImage(file);
+    if(!compressed) { $('#ba-upload-text').innerHTML = `<span style="color:var(--red)">Erro ao processar imagem</span>`; return; }
+    _brandFileData = compressed;
     $('#ba-preview-img').src = _brandFileData;
     $('#ba-preview').style.display = 'block';
-    $('#ba-upload-text').innerHTML = `<span style="color:var(--green)">✓ ${file.name}</span><br><span style="font-size:10px;color:var(--dim)">Clica para trocar</span>`;
+    const sizeKB = Math.round(_brandFileData.length / 1024);
+    $('#ba-upload-text').innerHTML = `<span style="color:var(--green)">✓ ${file.name}</span> <span style="color:var(--dim)">(${sizeKB}KB)</span><br><span style="font-size:10px;color:var(--dim)">Clica para trocar</span>`;
     $('#f-ba-url').value = '';
-  };
-  reader.readAsDataURL(file);
+  }
 }
 function addBrand() {
   const n=$('#f-ba-name').value.trim(); if(!n) return;
@@ -1682,7 +1709,12 @@ function addBrand() {
   const url = _brandFileData || $('#f-ba-url').value.trim();
   state.brandAssets.unshift({ id:uid(), name:n, type, url, notes:$('#f-ba-notes').value.trim(), date:now() });
   _brandFileData = '';
-  save(); closeModal(); render();
+  try { save(); } catch(e) {
+    state.brandAssets.shift();
+    alert('Imagem demasiado grande para guardar. Tenta com uma imagem mais pequena.');
+    return;
+  }
+  closeModal(); render();
 }
 function delBrand(id) { state.brandAssets=state.brandAssets.filter(i=>i.id!==id); save(); render(); }
 
