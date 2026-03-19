@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773910982';
+var APP_V='t1773912158';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -2664,9 +2664,9 @@ function renderObjectives(el) {
           <div style="margin-bottom:14px">${goals.map(g=>`
             <div class="goal-row">
               <button class="goal-check ${g.done?'done':''}" onclick="${isCurrent?`toggleGoal('${mk}','${g.id}')`:`toggleFutureGoal('${weekInfo.monISO}','${mk}','${g.id}')`}">${g.done?'✓':''}</button>
-              <span class="goal-text ${g.done?'done':''}">${esc(g.text)}</span>
+              <span class="goal-text ${g.done?'done':''}" onclick="${isCurrent?`editGoalModal('${mk}','${g.id}')`:`editFutureGoalModal('${weekInfo.monISO}','${mk}','${g.id}')`}" style="cursor:pointer">${esc(g.text)}</span>
               <span style="font-size:9px;color:var(--dim);white-space:nowrap">${g.assignee?esc(g.assignee):''}</span>
-              <button class="del-btn" onclick="${isCurrent?`delGoal('${mk}','${g.id}')`:`delFutureGoal('${weekInfo.monISO}','${mk}','${g.id}')`}">✕</button>
+              <button class="del-btn" onclick="if(confirm('Eliminar este objetivo?')){${isCurrent?`delGoal('${mk}','${g.id}')`:` delFutureGoal('${weekInfo.monISO}','${mk}','${g.id}')`}}">✕</button>
             </div>
           `).join('')}</div>
           <button class="btn btn-ghost btn-full" onclick="${isCurrent?`openGoalModal('${mk}')`:`openFutureGoalModal('${mk}',${viewWeekOffset})`}">+ Adicionar Objetivo</button>
@@ -2700,8 +2700,8 @@ function addGoal(member) {
   const t=$('#f-goal-text').value.trim(); if(!t) return;
   const assignee=$('#modal-content').querySelector('.chip.active')?.dataset.val||'';
   if(!assignee) {
-    state.objectives.member1.goals.push({ id:uid(), text:t, done:false, assignee:'' });
-    state.objectives.member2.goals.push({ id:uid(), text:t, done:false, assignee:'' });
+    state.objectives.member1.goals.push({ id:'g1_'+uid(), text:t, done:false, assignee:'Ambos' });
+    state.objectives.member2.goals.push({ id:'g2_'+uid(), text:t, done:false, assignee:'Ambos' });
   } else {
     state.objectives[member].goals.push({ id:uid(), text:t, done:false, assignee });
   }
@@ -2712,6 +2712,40 @@ function toggleGoal(member,id) {
   save(); render();
 }
 function delGoal(member,id) { state.objectives[member].goals=state.objectives[member].goals.filter(g=>g.id!==id); save(); render(); }
+function editGoalModal(member,id) {
+  const g=state.objectives[member].goals.find(x=>x.id===id); if(!g) return;
+  openModal('Editar Objetivo', `
+    <div class="form-group"><label class="label">Objetivo</label><input class="input" id="f-edit-goal" value="${esc(g.text)}" onkeydown="if(event.key==='Enter'){saveEditGoal('${member}','${id}')}"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary btn-full" onclick="saveEditGoal('${member}','${id}')">Guardar</button>
+      <button class="btn btn-ghost" onclick="if(confirm('Eliminar este objetivo?')){delGoal('${member}','${id}')}" style="color:var(--red)">Eliminar</button>
+    </div>
+  `);
+  setTimeout(()=>{const el=$('#f-edit-goal');if(el){el.focus();el.select();}},100);
+}
+function saveEditGoal(member,id) {
+  const t=$('#f-edit-goal').value.trim(); if(!t) return;
+  const g=state.objectives[member].goals.find(x=>x.id===id); if(g) g.text=t;
+  save(); closeModal(); render();
+}
+function editFutureGoalModal(monISO,member,id) {
+  const fw=getFutureWeek(monISO); if(!fw) return;
+  const g=fw[member].goals.find(x=>x.id===id); if(!g) return;
+  openModal('Editar Objetivo', `
+    <div class="form-group"><label class="label">Objetivo</label><input class="input" id="f-edit-goal" value="${esc(g.text)}" onkeydown="if(event.key==='Enter'){saveFutureEditGoal('${monISO}','${member}','${id}')}"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary btn-full" onclick="saveFutureEditGoal('${monISO}','${member}','${id}')">Guardar</button>
+      <button class="btn btn-ghost" onclick="if(confirm('Eliminar este objetivo?')){delFutureGoal('${monISO}','${member}','${id}')}" style="color:var(--red)">Eliminar</button>
+    </div>
+  `);
+  setTimeout(()=>{const el=$('#f-edit-goal');if(el){el.focus();el.select();}},100);
+}
+function saveFutureEditGoal(monISO,member,id) {
+  const t=$('#f-edit-goal').value.trim(); if(!t) return;
+  const fw=getFutureWeek(monISO); if(!fw) return;
+  const g=fw[member].goals.find(x=>x.id===id); if(g) g.text=t;
+  save(); closeModal(); render();
+}
 function clearObjectives() { state.objectives.member1.goals=[]; state.objectives.member2.goals=[]; save(); render(); }
 
 // Future week goals
@@ -2731,8 +2765,8 @@ function addFutureGoal(member, monISO, offset) {
   const fw=getOrCreateFutureWeek(weekInfo);
   const assignee=$('#modal-content').querySelector('.chip.active')?.dataset.val||'';
   if(!assignee) {
-    fw.member1.goals.push({ id:uid(), text:t, done:false, assignee:'' });
-    fw.member2.goals.push({ id:uid(), text:t, done:false, assignee:'' });
+    fw.member1.goals.push({ id:'g1_'+uid(), text:t, done:false, assignee:'Ambos' });
+    fw.member2.goals.push({ id:'g2_'+uid(), text:t, done:false, assignee:'Ambos' });
   } else {
     fw[member].goals.push({ id:uid(), text:t, done:false, assignee });
   }
@@ -2821,14 +2855,13 @@ function renderEventRow(e) {
   const dayNum=dateObj.getDate();
   const mon=MONTHS_PT[dateObj.getMonth()].slice(0,3);
   const notifLabel=NOTIFY_OPTS.find(o=>o.val===e.notify);
-  return '<div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--border)">'
+  return '<div style="display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="closeModal();openEventModal(null,\''+e.id+'\')">'
     +'<div style="min-width:44px;text-align:center"><div style="font-size:18px;font-weight:600;color:var(--gold);font-family:var(--font-display)">'+dayNum+'</div><div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:1px">'+mon+'</div></div>'
     +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;color:var(--text)">'+esc(e.title)+'</div>'
     +(e.time?'<span style="font-size:11px;color:var(--dim)">'+esc(e.time)+'</span>':'')
     +(e.notes?'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+esc(e.notes)+'</div>':'')
     +(notifLabel&&e.notify!=='none'?'<div style="font-size:9px;color:var(--gold);margin-top:2px">🔔 '+notifLabel.label+'</div>':'')
     +'</div>'
-    +'<button class="del-btn" onclick="delEvent(\''+e.id+'\')">✕</button>'
     +'</div>';
 }
 
@@ -2848,31 +2881,41 @@ function showDayEvents(ds) {
   openModal(label, events.map(e=>renderEventRow(e)).join('')+'<button class="btn btn-primary btn-full" style="margin-top:14px" onclick="closeModal();openEventModal(\''+ds+'\')">+ Adicionar Evento</button>');
 }
 
-function openEventModal(prefillDate) {
-  const dateVal=prefillDate||new Date().toISOString().slice(0,10);
-  openModal('Novo Evento', `
-    <div class="form-group"><label class="label">Título</label><input class="input" id="f-ev-title" placeholder="Ex: Entrega encomenda, feira, reunião..."></div>
+function openEventModal(prefillDate, editId) {
+  const e=editId?(state.calendar||[]).find(x=>x.id===editId):null;
+  const dateVal=e?e.date:(prefillDate||new Date().toISOString().slice(0,10));
+  const notifyVal=e?e.notify:'none';
+  openModal(e?'Editar Evento':'Novo Evento', `
+    <div class="form-group"><label class="label">Título</label><input class="input" id="f-ev-title" value="${esc(e?e.title:'')}" placeholder="Ex: Entrega encomenda, feira, reunião..."></div>
     <div class="form-group"><label class="label">Data</label><input class="input" id="f-ev-date" type="date" value="${dateVal}"></div>
-    <div class="form-group"><label class="label">Hora (opcional)</label><input class="input" id="f-ev-time" type="time"></div>
-    <div class="form-group"><label class="label">Notificação</label><div class="chip-group">${NOTIFY_OPTS.map((o,i)=>`<button class="chip ${i===0?'active':''}" onclick="pickChip(this)" data-val="${o.val}">${o.label}</button>`).join('')}</div></div>
-    <div class="form-group"><label class="label">Notas (opcional)</label><textarea class="input" id="f-ev-notes" placeholder="Detalhes adicionais..."></textarea></div>
-    <button class="btn btn-primary btn-full" onclick="addEvent()">Guardar Evento</button>
+    <div class="form-group"><label class="label">Hora (opcional)</label><input class="input" id="f-ev-time" type="time" value="${e?e.time||'':''}"></div>
+    <div class="form-group"><label class="label">Notificação</label><div class="chip-group">${NOTIFY_OPTS.map(o=>`<button class="chip ${o.val===notifyVal?'active':''}" onclick="pickChip(this)" data-val="${o.val}">${o.label}</button>`).join('')}</div></div>
+    <div class="form-group"><label class="label">Notas (opcional)</label><textarea class="input" id="f-ev-notes" placeholder="Detalhes adicionais...">${esc(e?e.notes||'':'')}</textarea></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary btn-full" onclick="saveEvent('${editId||''}')">${e?'Guardar':'Criar Evento'}</button>
+      ${e?`<button class="btn btn-ghost" onclick="if(confirm('Eliminar este evento?')){delEvent('${e.id}')}" style="color:var(--red)">Eliminar</button>`:''}
+    </div>
   `);
   setTimeout(()=>$('#f-ev-title')?.focus(),100);
 }
 
-function addEvent() {
+function saveEvent(editId) {
   const title=$('#f-ev-title').value.trim(); if(!title) return;
   const date=$('#f-ev-date').value; if(!date) return;
   const time=$('#f-ev-time').value||'';
   const notify=$('#modal-content').querySelector('.chip.active')?.dataset.val||'none';
   const notes=$('#f-ev-notes').value.trim();
   if(!state.calendar) state.calendar=[];
-  state.calendar.push({ id:uid(), title, date, time, notify, notes, notified:'' });
+  if(editId) {
+    const e=state.calendar.find(x=>x.id===editId);
+    if(e) Object.assign(e, {title, date, time, notify, notes});
+  } else {
+    state.calendar.push({ id:uid(), title, date, time, notify, notes, notified:'' });
+  }
   save(); closeModal(); render();
 }
 
-function delEvent(id) { state.calendar=state.calendar.filter(e=>e.id!==id); save(); render(); }
+function delEvent(id) { state.calendar=state.calendar.filter(e=>e.id!==id); save(); closeModal(); render(); }
 
 // ===== 9. NOTAS =====
 const DEFAULT_NOTE_SECTIONS = ['Geral','Marketing','Claude','Inspiração','Brand'];
