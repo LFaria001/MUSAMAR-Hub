@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773912307';
+var APP_V='t1773927913';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -770,10 +770,179 @@ function renderDashboard(el) {
           <div class="di-content"><div class="di-title">Próximo evento</div><div class="di-value">${upcoming.length?esc(upcoming[0].title):'Sem eventos'}</div></div>
           ${upcoming.length?`<span style="font-size:11px;color:var(--dim)">${upcoming[0].date.split('-').reverse().join('/')}</span>`:''}
         </div>
+        ${(()=>{
+          const bdays=(state.customers||[]).filter(c=>{
+            if(!c.birthday) return false;
+            const bd=new Date(c.birthday);
+            const thisYear=new Date(d.getFullYear(),bd.getMonth(),bd.getDate());
+            const diff=Math.round((thisYear-d)/86400000);
+            return diff>=0&&diff<=7;
+          }).map(c=>{
+            const bd=new Date(c.birthday);
+            const thisYear=new Date(d.getFullYear(),bd.getMonth(),bd.getDate());
+            const diff=Math.round((thisYear-d)/86400000);
+            return {name:c.name,diff};
+          });
+          return bdays.length?`<div class="dash-item" onclick="switchTab('customers')">
+            <span class="di-icon">🎂</span>
+            <div class="di-content"><div class="di-title">Aniversários próximos</div><div class="di-value">${bdays.map(b=>esc(b.name)+(b.diff===0?' (HOJE!)':' ('+b.diff+'d)')).join(', ')}</div></div>
+          </div>`:'';
+        })()}
       </div>
     </div>
+
+    ${renderProductionList()}
   `;
   setTimeout(()=>{checkFCMStatus();checkAppStatus();},500);
+}
+
+function renderProductionList() {
+  const today=new Date().toISOString().slice(0,10);
+  const activeOrders=(state.orders||[]).filter(o=>o.status==='pendente'||o.status==='pago'||o.status==='em produção');
+  if(!activeOrders.length) return '';
+  // Aggregate flavors needed
+  const flavorTotals={};
+  let totalDates=0;
+  activeOrders.forEach(o=>{
+    (o.items||[]).forEach(i=>{
+      const packQty=parseFloat(i.qty)||1;
+      (i.dates||[]).forEach(d=>{
+        const qty=d.qty*packQty;
+        const name=d.flavorName||'?';
+        if(!flavorTotals[name]) flavorTotals[name]=0;
+        flavorTotals[name]+=qty;
+        totalDates+=qty;
+      });
+    });
+  });
+  const flavors=Object.entries(flavorTotals).sort((a,b)=>b[1]-a[1]);
+  // Aggregate ingredients needed from recipes
+  const ingTotals={};
+  activeOrders.forEach(o=>{
+    (o.items||[]).forEach(i=>{
+      const packQty=parseFloat(i.qty)||1;
+      (i.dates||[]).forEach(d=>{
+        const qty=d.qty*packQty;
+        const flavor=(state.flavors||[]).find(f=>f.id===d.flavorId);
+        if(!flavor||!flavor.recipe) return;
+        flavor.recipe.forEach(r=>{
+          const inv=(state.inventory||[]).find(x=>x.id===r.inventoryId);
+          const name=inv?inv.name:r.inventoryId;
+          const unit=r.unit||(inv?inv.unit:'');
+          const key=name+'|'+unit;
+          if(!ingTotals[key]) ingTotals[key]={name,unit,qty:0};
+          ingTotals[key].qty+=r.qty*qty;
+        });
+      });
+    });
+  });
+  const ings=Object.values(ingTotals).sort((a,b)=>b.qty-a.qty);
+
+  return `<div class="card" style="padding:16px;margin-top:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;font-weight:600">Lista de Produção</div>
+      <span style="font-size:11px;color:var(--muted)">${activeOrders.length} encomendas · ${totalDates} tâmaras</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <div style="font-size:10px;color:var(--muted);letter-spacing:0.5px;margin-bottom:6px">SABORES</div>
+        ${flavors.map(([name,qty])=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border)">
+          <span style="font-weight:500">${esc(name)}</span>
+          <span style="color:var(--gold);font-weight:600">${qty}×</span>
+        </div>`).join('')}
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--muted);letter-spacing:0.5px;margin-bottom:6px">INGREDIENTES</div>
+        ${ings.length?ings.map(i=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border)">
+          <span>${esc(i.name)}</span>
+          <span style="color:var(--muted)">${i.qty.toFixed(1)} ${esc(i.unit)}</span>
+        </div>`).join(''):'<div style="font-size:11px;color:var(--dim)">Sem receitas</div>'}
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+      <span style="font-size:10px;color:var(--muted);letter-spacing:0.5px">Encomendas: ${activeOrders.map(o=>'#'+(o.orderNum||'?')+' ('+esc(o.status)+')').join(' · ')}</span>
+      <button class="btn btn-primary" onclick="openProductionMode()" style="font-size:10px;padding:6px 12px">⏱ Modo Produção</button>
+    </div>
+  </div>`;
+}
+
+let _prodTimer=null, _prodStartTime=null, _prodFlavor='', _prodLogs=[];
+function openProductionMode() {
+  const activeOrders=(state.orders||[]).filter(o=>o.status==='pendente'||o.status==='pago'||o.status==='em produção');
+  const flavorTotals={};
+  activeOrders.forEach(o=>(o.items||[]).forEach(i=>{
+    const pq=parseFloat(i.qty)||1;
+    (i.dates||[]).forEach(d=>{
+      const n=d.flavorName||'?';
+      if(!flavorTotals[n]) flavorTotals[n]=0;
+      flavorTotals[n]+=d.qty*pq;
+    });
+  }));
+  const flavors=Object.entries(flavorTotals).sort((a,b)=>b[1]-a[1]);
+  _prodLogs=state.productionLogs||[];
+  openModal('Modo Produção', `
+    <div style="text-align:center;margin-bottom:16px">
+      <div id="prod-timer" style="font-size:48px;font-family:var(--font-display);color:var(--gold);letter-spacing:2px">00:00</div>
+      <div id="prod-flavor" style="font-size:12px;color:var(--muted);margin-top:4px">${_prodFlavor?'A preparar: '+esc(_prodFlavor):'Seleciona um sabor'}</div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:16px">
+      ${flavors.map(([name,qty])=>`<button class="chip ${_prodFlavor===name?'active':''}" onclick="startProdTimer('${esc(name)}')" style="font-size:11px">${esc(name)} (${qty}×)</button>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px">
+      <button class="btn btn-primary" id="prod-start-btn" onclick="toggleProdTimer()">${_prodTimer?'⏸ Pausar':'▶ Iniciar'}</button>
+      <button class="btn btn-ghost" onclick="stopProdTimer()">⏹ Parar e Registar</button>
+    </div>
+    <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;font-weight:600">Registo de Tempos</div>
+    <div id="prod-logs" style="max-height:150px;overflow-y:auto">${renderProdLogs()}</div>
+  `);
+  if(_prodTimer) updateProdTimerDisplay();
+}
+function renderProdLogs() {
+  const logs=state.productionLogs||[];
+  if(!logs.length) return '<div style="font-size:11px;color:var(--dim)">Sem registos</div>';
+  return logs.slice(-10).reverse().map(l=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px;border-bottom:1px solid var(--border)">
+    <span style="font-weight:500">${esc(l.flavor)}</span>
+    <span style="color:var(--muted)">${l.minutes.toFixed(1)} min — ${l.date}</span>
+  </div>`).join('');
+}
+function startProdTimer(flavor) {
+  _prodFlavor=flavor;
+  const el=document.getElementById('prod-flavor');
+  if(el) el.textContent='A preparar: '+flavor;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('active',c.textContent.startsWith(flavor)));
+}
+function toggleProdTimer() {
+  if(_prodTimer) { clearInterval(_prodTimer); _prodTimer=null; document.getElementById('prod-start-btn').textContent='▶ Continuar'; }
+  else {
+    if(!_prodStartTime) _prodStartTime=Date.now();
+    _prodTimer=setInterval(updateProdTimerDisplay,1000);
+    document.getElementById('prod-start-btn').textContent='⏸ Pausar';
+  }
+}
+function updateProdTimerDisplay() {
+  if(!_prodStartTime) return;
+  const elapsed=Math.floor((Date.now()-_prodStartTime)/1000);
+  const m=Math.floor(elapsed/60), s=elapsed%60;
+  const el=document.getElementById('prod-timer');
+  if(el) el.textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+function stopProdTimer() {
+  if(_prodTimer) { clearInterval(_prodTimer); _prodTimer=null; }
+  if(_prodStartTime&&_prodFlavor) {
+    const minutes=(Date.now()-_prodStartTime)/60000;
+    if(!state.productionLogs) state.productionLogs=[];
+    state.productionLogs.push({flavor:_prodFlavor,minutes,date:new Date().toISOString().slice(0,10),timestamp:Date.now()});
+    save();
+  }
+  _prodStartTime=null; _prodFlavor='';
+  const timer=document.getElementById('prod-timer');
+  if(timer) timer.textContent='00:00';
+  const logs=document.getElementById('prod-logs');
+  if(logs) logs.innerHTML=renderProdLogs();
+  const flavorEl=document.getElementById('prod-flavor');
+  if(flavorEl) flavorEl.textContent='Seleciona um sabor';
+  const btn=document.getElementById('prod-start-btn');
+  if(btn) btn.textContent='▶ Iniciar';
 }
 
 function checkAppStatus() {
@@ -818,7 +987,7 @@ function renderProducts(el) {
   el.innerHTML=`
     <div class="section-header">
       <div><h1>Produtos</h1><div class="sub">${flavors.length} sabores · ${packs.length} packs</div></div>
-      <div style="display:flex;gap:8px"><button class="btn btn-ghost" onclick="openFlavorModal()">+ Sabor</button><button class="btn btn-primary" onclick="openPackModal()">+ Pack</button></div>
+      <div style="display:flex;gap:8px"><button class="btn btn-ghost" onclick="openPriceSimulator()">🧮 Simulador</button><button class="btn btn-ghost" onclick="openFlavorModal()">+ Sabor</button><button class="btn btn-primary" onclick="openPackModal()">+ Pack</button></div>
     </div>
 
     ${packs.length?`<div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;font-weight:600">Packs</div>
@@ -922,6 +1091,63 @@ function calcCostFromInv(key) {
   else cost=inv.costPerUnit*grams;
   costInput.value=cost.toFixed(3);
   if(calcLabel) calcLabel.textContent=`${fmt(inv.costPerUnit)}/${inv.unit} × ${grams}g = ${fmt(cost)}`;
+}
+
+function openPriceSimulator() {
+  const packs=state.packs||[];
+  const flavors=state.flavors||[];
+  if(!packs.length||!flavors.length) { openModal('Simulador de Preço','<p style="color:var(--dim)">Cria pelo menos 1 pack e 1 sabor primeiro.</p>'); return; }
+  openModal('Simulador de Preço', `
+    <p style="font-size:11px;color:var(--muted);margin-bottom:12px">Testa preços diferentes sem alterar os valores reais.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="form-group"><label class="label">Pack</label><select class="input" id="sim-pack" onchange="updateSimulator()">
+        ${packs.map(p=>`<option value="${p.id}">Pack ${p.size} — ${fmt(p.salePrice)}</option>`).join('')}
+      </select></div>
+      <div class="form-group"><label class="label">Sabor</label><select class="input" id="sim-flavor" onchange="updateSimulator()">
+        ${flavors.map(f=>`<option value="${f.id}">${esc(f.name)} — ${fmt(flavorUnitCost(f))}/un</option>`).join('')}
+      </select></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+      <div class="form-group"><label class="label">Preço simulado (€)</label><input class="input" type="number" step="0.5" id="sim-price" oninput="updateSimulator()"></div>
+      <div class="form-group"><label class="label">Custo embalagem (€)</label><input class="input" type="number" step="0.01" id="sim-pkg" oninput="updateSimulator()"></div>
+      <div class="form-group"><label class="label">Qtd vendida/mês</label><input class="input" type="number" step="1" id="sim-qty" value="10" oninput="updateSimulator()"></div>
+    </div>
+    <div id="sim-results" class="card" style="padding:14px;background:var(--bg)"></div>
+  `);
+  // Init with selected pack values
+  const p=packs[0];
+  document.getElementById('sim-price').value=p.salePrice||0;
+  document.getElementById('sim-pkg').value=p.packagingCost||0;
+  updateSimulator();
+}
+function updateSimulator() {
+  const packId=document.getElementById('sim-pack').value;
+  const flavorId=document.getElementById('sim-flavor').value;
+  const pack=(state.packs||[]).find(p=>p.id===packId);
+  const flavor=(state.flavors||[]).find(f=>f.id===flavorId);
+  if(!pack||!flavor) return;
+  const simPrice=parseFloat(document.getElementById('sim-price').value)||0;
+  const simPkg=parseFloat(document.getElementById('sim-pkg').value)||0;
+  const simQty=parseFloat(document.getElementById('sim-qty').value)||0;
+  const uc=flavorUnitCost(flavor);
+  const size=parseFloat(pack.size)||0;
+  const cost=uc*size+simPkg;
+  const profit=simPrice-cost;
+  const margin=simPrice>0?(profit/simPrice*100):0;
+  const realProfit=(parseFloat(pack.salePrice)||0)-packTotalCost(pack,flavor);
+  const diff=profit-realProfit;
+  const monthlyProfit=profit*simQty;
+  const monthlyRev=simPrice*simQty;
+  const el=document.getElementById('sim-results');
+  el.innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+      <div><div class="kpi-label">Custo produção</div><div style="font-size:16px;font-weight:600;color:var(--red)">${fmt(cost)}</div></div>
+      <div><div class="kpi-label">Lucro/pack</div><div style="font-size:16px;font-weight:600;color:${profit>=0?'var(--green)':'var(--red)'}">${fmt(profit)}</div></div>
+      <div><div class="kpi-label">Margem</div><div style="font-size:16px;font-weight:600;color:${margin>=50?'var(--green)':margin>=30?'var(--gold)':'var(--red)'}">${margin.toFixed(1)}%</div></div>
+      <div><div class="kpi-label">vs. Real</div><div style="font-size:16px;font-weight:600;color:${diff>=0?'var(--green)':'var(--red)'}">${diff>=0?'+':''}${fmt(diff)}</div></div>
+      <div><div class="kpi-label">Receita/mês</div><div style="font-size:16px;font-weight:600">${fmt(monthlyRev)}</div></div>
+      <div><div class="kpi-label">Lucro/mês</div><div style="font-size:16px;font-weight:600;color:${monthlyProfit>=0?'var(--green)':'var(--red)'}">${fmt(monthlyProfit)}</div></div>
+    </div>`;
 }
 
 function recipeIngRow(r,inv) {
@@ -1287,12 +1513,35 @@ function saveOrder(editId) {
   save(); closeModal(); render();
 }
 
+function orderTracker(status) {
+  const steps=['pendente','pago','em produção','enviado','entregue'];
+  const cancelled=status==='cancelado';
+  const idx=cancelled?-1:steps.indexOf(status);
+  return `<div style="display:flex;align-items:center;gap:0;margin-bottom:16px;padding:8px 0">
+    ${steps.map((s,i)=>{
+      const done=i<=idx&&!cancelled;
+      const current=i===idx&&!cancelled;
+      const icons=['📝','💳','🔧','🚚','✅'];
+      return (i>0?`<div style="flex:1;height:2px;background:${i<=idx&&!cancelled?'var(--gold)':'var(--border)'};margin:0 -2px"></div>`:'')+
+        `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;z-index:1">
+          <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;
+            background:${current?'var(--gold)':done?'var(--gold)':'var(--card)'};
+            color:${done||current?'var(--bg)':'var(--dim)'};
+            border:2px solid ${done||current?'var(--gold)':'var(--border)'};
+            ${current?'box-shadow:0 0 0 3px rgba(77,44,20,0.2);':''}
+            font-weight:600">${icons[i]}</div>
+          <span style="font-size:8px;color:${current?'var(--gold)':done?'var(--muted)':'var(--dim)'};letter-spacing:0.5px;text-transform:uppercase;white-space:nowrap;font-weight:${current?'600':'400'}">${s}</span>
+        </div>`;
+    }).join('')}
+  </div>${cancelled?'<div style="text-align:center;margin-bottom:12px"><span class="badge badge-cancelled" style="font-size:12px;padding:6px 16px">Cancelado</span></div>':''}`;
+}
 function viewOrder(id) {
   const o=(state.orders||[]).find(x=>x.id===id); if(!o) return;
   const cust=(state.customers||[]).find(c=>c.id===o.customerId);
   const rev=orderRevenue(o), cost=orderCost(o), prof=orderProfit(o);
   openModal('Encomenda #'+o.orderNum, `
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">${statusBadge(o.status)} ${statusBadge(o.paymentStatus||'pendente')}</div>
+    ${orderTracker(o.status)}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">${statusBadge(o.paymentStatus||'pendente')}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
       <div><div class="label">Data</div><div style="font-size:13px">${o.date||'—'}</div></div>
       <div><div class="label">Canal</div><div style="font-size:13px">${esc(o.channel||'—')}</div></div>
@@ -1341,7 +1590,7 @@ function renderCustomers(el) {
       <button class="btn btn-primary" onclick="openCustomerModal()">+ Novo Cliente</button>
     </div>
     ${custs.length?`<div class="card" style="padding:0;overflow-x:auto"><table class="data-table">
-      <thead><tr><th>Nome</th><th>Contacto</th><th>Encomendas</th><th>Total gasto</th><th>Tipo</th><th>Última compra</th></tr></thead>
+      <thead><tr><th>Nome</th><th>Contacto</th><th>Encomendas</th><th>Total gasto</th><th>Tipo</th><th>Aniversário</th><th>Última compra</th></tr></thead>
       <tbody>${custs.map(c=>{
         const s=getCustomerStats(c.id);
         const days=s.last?Math.round((Date.now()-new Date(s.last).getTime())/86400000):'—';
@@ -1351,6 +1600,7 @@ function renderCustomers(el) {
           <td>${s.count}</td>
           <td>${fmt(s.total)}</td>
           <td>${s.count>1?'<span class="badge badge-ok">Recorrente</span>':'<span class="badge badge-pending">Novo</span>'}</td>
+          <td style="color:var(--dim);font-size:11px">${c.birthday?c.birthday.split('-').reverse().join('/'):'—'}</td>
           <td style="color:var(--dim);font-size:11px">${s.last?s.last.split('-').reverse().join('/'):'—'}${typeof days==='number'?' ('+days+'d)':''}</td>
         </tr>`;
       }).join('')}</tbody>
@@ -1359,14 +1609,58 @@ function renderCustomers(el) {
 
 function openCustomerModal(editId) {
   const c=editId?(state.customers||[]).find(x=>x.id===editId):null;
+  // Customer order history
+  let historyHtml='';
+  if(c) {
+    const cOrds=(state.orders||[]).filter(o=>o.customerId===c.id&&o.status!=='cancelado').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+    const totalSpent=cOrds.reduce((s,o)=>s+orderRevenue(o),0);
+    const totalProfit=cOrds.reduce((s,o)=>s+orderProfit(o),0);
+    const favFlavors={};
+    cOrds.forEach(o=>(o.items||[]).forEach(i=>(i.dates||[]).forEach(d=>{
+      const n=d.flavorName||'?'; if(!favFlavors[n]) favFlavors[n]=0; favFlavors[n]+=d.qty*(parseFloat(i.qty)||1);
+    })));
+    const topFlavs=Object.entries(favFlavors).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    // Birthday check
+    const bday=c.birthday;
+    const today=new Date();
+    let bdayNote='';
+    if(bday) {
+      const bd=new Date(bday);
+      const thisYear=new Date(today.getFullYear(),bd.getMonth(),bd.getDate());
+      const diff=Math.round((thisYear-today)/86400000);
+      if(diff===0) bdayNote='🎂 Faz anos HOJE!';
+      else if(diff>0&&diff<=7) bdayNote='🎂 Faz anos em '+diff+' dias';
+      else if(diff<0&&diff>=-1) bdayNote='🎂 Fez anos ontem';
+    }
+    historyHtml=`
+    <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;font-weight:600">Perfil do Cliente</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+      <div class="card" style="padding:10px;text-align:center"><div style="font-size:18px;font-weight:600;color:var(--gold)">${cOrds.length}</div><div style="font-size:9px;color:var(--muted)">Encomendas</div></div>
+      <div class="card" style="padding:10px;text-align:center"><div style="font-size:18px;font-weight:600;color:var(--green)">${fmt(totalSpent)}</div><div style="font-size:9px;color:var(--muted)">Total gasto</div></div>
+      <div class="card" style="padding:10px;text-align:center"><div style="font-size:18px;font-weight:600;color:${totalProfit>=0?'var(--green)':'var(--red)'}">${fmt(totalProfit)}</div><div style="font-size:9px;color:var(--muted)">Lucro gerado</div></div>
+    </div>
+    ${bdayNote?`<div style="background:rgba(77,44,20,0.08);padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:8px">${bdayNote}</div>`:''}
+    ${topFlavs.length?`<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Favoritos: ${topFlavs.map(([n,q])=>'<b style="color:var(--text)">'+esc(n)+'</b> ('+q+'×)').join(', ')}</div>`:''}
+    ${cOrds.length?`<div style="max-height:150px;overflow-y:auto"><table class="data-table" style="font-size:10px">
+      <thead><tr><th>#</th><th>Data</th><th>Itens</th><th>Total</th><th>Estado</th></tr></thead>
+      <tbody>${cOrds.slice(0,10).map(o=>{
+        const itemStr=(o.items||[]).map(i=>(i.dates||[]).map(d=>d.qty+'× '+(d.flavorName||'?')).join(', ')).join('; ');
+        return `<tr><td style="color:var(--gold)">#${o.orderNum||'—'}</td><td>${o.date||'—'}</td><td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(itemStr)}</td><td>${fmt(orderRevenue(o))}</td><td>${statusBadge(o.status)}</td></tr>`;
+      }).join('')}</tbody>
+    </table></div>`:''}`;
+  }
   openModal(c?'Editar Cliente':'Novo Cliente', `
     <div class="form-group"><label class="label">Nome completo</label><input class="input" id="f-cust-name" value="${esc(c?c.name:'')}"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group"><label class="label">Telefone</label><input class="input" id="f-cust-phone" value="${esc(c?c.phone:'')}"></div>
       <div class="form-group"><label class="label">Email</label><input class="input" id="f-cust-email" type="email" value="${esc(c?c.email:'')}"></div>
     </div>
-    <div class="form-group"><label class="label">Canal de aquisição</label><select class="input" id="f-cust-source">${CHANNELS.map(ch=>`<option ${c&&c.source===ch?'selected':''}>${ch}</option>`).join('')}</select></div>
-    <div style="display:flex;gap:8px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><label class="label">Canal de aquisição</label><select class="input" id="f-cust-source">${CHANNELS.map(ch=>`<option ${c&&c.source===ch?'selected':''}>${ch}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="label">Aniversário</label><input class="input" type="date" id="f-cust-bday" value="${c&&c.birthday?c.birthday:''}"></div>
+    </div>
+    ${historyHtml}
+    <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn btn-primary btn-full" onclick="saveCustomer('${editId||''}')">${c?'Guardar':'Criar Cliente'}</button>
       ${c?`<button class="btn btn-ghost" onclick="delCustomer('${c.id}')" style="color:var(--red)">Eliminar</button>`:''}
     </div>
@@ -1375,7 +1669,7 @@ function openCustomerModal(editId) {
 
 function saveCustomer(editId) {
   const name=$('#f-cust-name').value.trim(); if(!name) return;
-  const data={name, phone:$('#f-cust-phone').value.trim(), email:$('#f-cust-email').value.trim(), source:$('#f-cust-source').value};
+  const data={name, phone:$('#f-cust-phone').value.trim(), email:$('#f-cust-email').value.trim(), source:$('#f-cust-source').value, birthday:$('#f-cust-bday').value||''};
   if(!state.customers) state.customers=[];
   if(editId) { const c=state.customers.find(x=>x.id===editId); if(c) Object.assign(c,data); }
   else { data.id=uid(); data.createdAt=Date.now(); state.customers.push(data); }
@@ -2307,6 +2601,7 @@ function renderAnalytics(el) {
   el.innerHTML=`
     <div class="section-header">
       <div><h1>Analytics</h1><div class="sub">Métricas e análise do negócio</div></div>
+      <div style="display:flex;gap:8px"><button class="btn btn-ghost" onclick="openMonthCompare()">📊 Comparar Meses</button><button class="btn btn-primary" onclick="exportReport()">📄 Exportar</button></div>
     </div>
 
     <div class="pills" style="margin-bottom:20px">
@@ -2514,6 +2809,124 @@ function renderAnalytics(el) {
 
     </div>
   `;
+}
+
+// ===== EXPORT REPORT =====
+function exportReport() {
+  const orders=(state.orders||[]).filter(o=>o.status!=='cancelado');
+  const now=new Date();
+  const monthKey=now.toISOString().slice(0,7);
+  const mOrds=orders.filter(o=>o.date&&o.date.slice(0,7)===monthKey);
+  const rev=mOrds.reduce((s,o)=>s+orderRevenue(o),0);
+  const cost=mOrds.reduce((s,o)=>s+orderCost(o),0);
+  const profit=rev-cost;
+  const margin=rev>0?(profit/rev*100):0;
+  const expenses=(state.finances||[]).filter(i=>i.type==='saida'&&i.date&&i.date.slice(0,7)===monthKey);
+  const totalExp=expenses.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
+  const invCost=(state.inventory||[]).reduce((s,i)=>s+(parseFloat(i.qtyReceived)||0)*(parseFloat(i.costPerUnit)||0),0);
+  const net=rev-invCost-totalExp;
+  const topFlavors={};
+  mOrds.forEach(o=>(o.items||[]).forEach(i=>(i.dates||[]).forEach(d=>{
+    const n=d.flavorName||'?'; if(!topFlavors[n]) topFlavors[n]=0; topFlavors[n]+=d.qty*(parseFloat(i.qty)||1);
+  })));
+  const flavorRows=Object.entries(topFlavors).sort((a,b)=>b[1]-a[1]);
+  const MONTHS_PT=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const monthLabel=MONTHS_PT[now.getMonth()]+' '+now.getFullYear();
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Relatório ${monthLabel} — Musamar</title>
+  <style>body{font-family:'DM Sans',sans-serif;max-width:700px;margin:40px auto;color:#3a1f0b;padding:20px}
+  h1{font-family:'Playfair Display',serif;color:#4d2c14;font-size:28px;margin-bottom:4px}
+  h2{font-size:14px;color:#4d2c14;text-transform:uppercase;letter-spacing:2px;margin:24px 0 8px;border-bottom:1px solid #e0cdb5;padding-bottom:4px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  .kpi{background:#fff5e8;border:1px solid #e0cdb5;border-radius:8px;padding:12px;text-align:center}
+  .kpi-label{font-size:10px;color:#7a5c3e;text-transform:uppercase;letter-spacing:1px}
+  .kpi-value{font-size:22px;font-weight:600;margin-top:4px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{padding:6px 8px;border-bottom:1px solid #e0cdb5;text-align:left}
+  th{font-size:10px;color:#7a5c3e;text-transform:uppercase;letter-spacing:1px}
+  .green{color:#3a7d4a} .red{color:#a83232} .gold{color:#4d2c14}
+  .footer{margin-top:30px;font-size:10px;color:#9a8268;text-align:center}
+  @media print{body{margin:0;padding:10px}}</style></head><body>
+  <h1>MUSAMAR</h1><p style="color:#7a5c3e;font-size:12px">Relatório Mensal — ${monthLabel}</p>
+  <h2>Resumo Financeiro</h2>
+  <div class="grid">
+    <div class="kpi"><div class="kpi-label">Receita</div><div class="kpi-value green">${fmt(rev)}</div></div>
+    <div class="kpi"><div class="kpi-label">Custo Vendas</div><div class="kpi-value red">${fmt(cost)}</div></div>
+    <div class="kpi"><div class="kpi-label">Lucro Bruto</div><div class="kpi-value ${profit>=0?'green':'red'}">${fmt(profit)} (${margin.toFixed(1)}%)</div></div>
+    <div class="kpi"><div class="kpi-label">Despesas Op.</div><div class="kpi-value red">${fmt(totalExp)}</div></div>
+    <div class="kpi"><div class="kpi-label">Investimento Inv.</div><div class="kpi-value red">${fmt(invCost)}</div></div>
+    <div class="kpi"><div class="kpi-label">Lucro Líquido</div><div class="kpi-value ${net>=0?'green':'red'}">${fmt(net)}</div></div>
+  </div>
+  <h2>Encomendas (${mOrds.length})</h2>
+  <table><thead><tr><th>#</th><th>Data</th><th>Cliente</th><th>Total</th><th>Lucro</th></tr></thead><tbody>
+  ${mOrds.map(o=>{const c=(state.customers||[]).find(x=>x.id===o.customerId);
+    return `<tr><td class="gold">#${o.orderNum||'—'}</td><td>${o.date||'—'}</td><td>${esc(c?c.name:'—')}</td><td>${fmt(orderRevenue(o))}</td><td class="${orderProfit(o)>=0?'green':'red'}">${fmt(orderProfit(o))}</td></tr>`;
+  }).join('')}</tbody></table>
+  <h2>Top Sabores</h2>
+  <table><thead><tr><th>Sabor</th><th>Unidades</th></tr></thead><tbody>
+  ${flavorRows.map(([n,q])=>`<tr><td>${esc(n)}</td><td>${q}</td></tr>`).join('')}</tbody></table>
+  ${expenses.length?`<h2>Despesas Operacionais</h2>
+  <table><thead><tr><th>Descrição</th><th>Valor</th><th>Data</th></tr></thead><tbody>
+  ${expenses.map(e=>`<tr><td>${esc(e.description||'—')}</td><td class="red">${fmt(e.amount)}</td><td>${e.date||'—'}</td></tr>`).join('')}</tbody></table>`:''}
+  <div class="footer">Gerado automaticamente pelo Musamar Hub — ${new Date().toLocaleString('pt-PT')}</div>
+  </body></html>`;
+
+  const blob=new Blob([html],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const w=window.open(url,'_blank');
+  if(w) w.onload=()=>setTimeout(()=>w.print(),500);
+  else { const a=document.createElement('a');a.href=url;a.download='relatorio-'+monthKey+'.html';a.click(); }
+}
+
+// ===== MONTH COMPARISON =====
+function openMonthCompare() {
+  const orders=(state.orders||[]).filter(o=>o.status!=='cancelado');
+  const monthlyData={};
+  orders.forEach(o=>{
+    if(!o.date) return;
+    const m=o.date.slice(0,7);
+    if(!monthlyData[m]) monthlyData[m]={rev:0,cost:0,orders:0,units:0,customers:new Set()};
+    monthlyData[m].rev+=orderRevenue(o);
+    monthlyData[m].cost+=orderCost(o);
+    monthlyData[m].orders++;
+    monthlyData[m].units+=(o.items||[]).reduce((s,i)=>s+(parseFloat(i.qty)||0)*(parseFloat(i.packSize)||0),0);
+    if(o.customerId) monthlyData[m].customers.add(o.customerId);
+  });
+  const keys=Object.keys(monthlyData).sort().slice(-12);
+  if(keys.length<2) { openModal('Comparação','<p style="color:var(--dim)">Precisas de pelo menos 2 meses com dados.</p>'); return; }
+  const MONTHS_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const rows=keys.map(k=>{
+    const d=monthlyData[k];
+    const profit=d.rev-d.cost;
+    const margin=d.rev>0?(profit/d.rev*100):0;
+    const ticket=d.orders>0?(d.rev/d.orders):0;
+    const label=MONTHS_PT[parseInt(k.slice(5))-1]+' '+k.slice(0,4);
+    return {key:k,label,rev:d.rev,cost:d.cost,profit,margin,orders:d.orders,units:d.units,customers:d.customers.size,ticket};
+  });
+  // Calculate month-over-month changes
+  const withDelta=rows.map((r,i)=>{
+    if(i===0) return {...r,revDelta:0,profitDelta:0};
+    const prev=rows[i-1];
+    return {...r,revDelta:prev.rev>0?((r.rev-prev.rev)/prev.rev*100):0,profitDelta:prev.profit>0?((r.profit-prev.profit)/prev.profit*100):0};
+  });
+
+  openModal('Comparação Mês a Mês', `
+    <div style="overflow-x:auto"><table class="data-table" style="font-size:11px">
+      <thead><tr><th>Mês</th><th>Receita</th><th>Δ</th><th>Lucro</th><th>Δ</th><th>Margem</th><th>Enc.</th><th>Ticket</th><th>Clientes</th><th>Unidades</th></tr></thead>
+      <tbody>${withDelta.map(r=>`<tr>
+        <td style="color:var(--gold);font-weight:600;white-space:nowrap">${r.label}</td>
+        <td style="color:var(--green)">${fmt(r.rev)}</td>
+        <td style="color:${r.revDelta>=0?'var(--green)':'var(--red)'};font-size:10px">${r.revDelta?((r.revDelta>=0?'+':'')+r.revDelta.toFixed(1)+'%'):'—'}</td>
+        <td style="color:${r.profit>=0?'var(--green)':'var(--red)'}">${fmt(r.profit)}</td>
+        <td style="color:${r.profitDelta>=0?'var(--green)':'var(--red)'};font-size:10px">${r.profitDelta?((r.profitDelta>=0?'+':'')+r.profitDelta.toFixed(1)+'%'):'—'}</td>
+        <td>${r.margin.toFixed(0)}%</td>
+        <td>${r.orders}</td>
+        <td>${fmt(r.ticket)}</td>
+        <td>${r.customers}</td>
+        <td>${Math.round(r.units)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+  `);
 }
 
 // ===== 6. OBJETIVOS =====
