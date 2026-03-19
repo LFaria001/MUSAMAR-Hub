@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773927913';
+var APP_V='t1773942095';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -1994,6 +1994,9 @@ function renderFeedback(el) {
         ${f.packagingFb?`<div style="font-size:11px;color:var(--muted);margin-top:4px">📦 Embalagem: ${esc(f.packagingFb)}</div>`:''}
         ${f.deliveryFb?`<div style="font-size:11px;color:var(--muted);margin-top:2px">🚚 Entrega: ${esc(f.deliveryFb)}</div>`:''}
         ${f.suggestion?`<div style="font-size:11px;color:var(--gold);margin-top:4px">💡 ${esc(f.suggestion)}</div>`:''}
+        <div style="margin-top:8px;display:flex;align-items:center;gap:6px">
+          <button class="btn ${f.showOnWebsite?'btn-primary':'btn-ghost'}" onclick="toggleFbWebsite('${f.id}')" style="font-size:10px;padding:4px 10px">${f.showOnWebsite?'🌐 No website':'Mostrar no site'}</button>
+        </div>
       </div>`;
     }).join(''):'<div class="empty"><div class="icon">⭐</div><p>Sem feedback registado.</p></div>'}`;
 }
@@ -2016,6 +2019,7 @@ function openFeedbackModal() {
     </div>
     <div class="form-group"><label class="label">Tipo de reclamação</label><select class="input" id="f-fb-complaint"><option value="">Sem reclamação</option>${complaints.map(c=>`<option>${c}</option>`).join('')}</select></div>
     <div class="form-group"><label class="label">Sugestão de melhoria</label><input class="input" id="f-fb-sug" placeholder="Opcional"></div>
+    <div class="form-group" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="f-fb-website"><label for="f-fb-website" style="font-size:12px;color:var(--muted);cursor:pointer">Mostrar no website musamar.com</label></div>
     <button class="btn btn-primary btn-full" onclick="saveFeedback()">Guardar Feedback</button>
   `);
 }
@@ -2025,16 +2029,18 @@ function pickFbStar(n) { fbRating=fbRating===n?0:n; document.querySelectorAll('#
 
 function saveFeedback() {
   if(!state.feedback) state.feedback=[];
+  const fbCust=(state.customers||[]).find(c=>c.id===$('#f-fb-cust').value);
   state.feedback.push({
-    id:uid(), customerId:$('#f-fb-cust').value, orderId:$('#f-fb-ord').value,
+    id:uid(), customerId:$('#f-fb-cust').value, customerName:fbCust?fbCust.name:'', orderId:$('#f-fb-ord').value, date:new Date().toISOString().slice(0,10),
     rating:fbRating, favProduct:$('#f-fb-fav').value,
     comment:$('#f-fb-comment').value.trim(), packagingFb:$('#f-fb-pkg').value.trim(),
     deliveryFb:$('#f-fb-del').value.trim(), complaintType:$('#f-fb-complaint').value,
-    suggestion:$('#f-fb-sug').value.trim(), createdAt:Date.now()
+    suggestion:$('#f-fb-sug').value.trim(), showOnWebsite:$('#f-fb-website').checked, createdAt:Date.now()
   });
   fbRating=0; save(); closeModal(); render();
 }
 function delFeedback(id) { state.feedback=(state.feedback||[]).filter(x=>x.id!==id); save(); render(); }
+function toggleFbWebsite(id) { const f=(state.feedback||[]).find(x=>x.id===id); if(f) { f.showOnWebsite=!f.showOnWebsite; save(); render(); } }
 
 // ===== 1. INSPIRAÇÃO (dentro de Notas) =====
 function openInspirationModal() {
