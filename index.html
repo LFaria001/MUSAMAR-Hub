@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773912158';
+var APP_V='t1773912307';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -2708,7 +2708,13 @@ function addGoal(member) {
   save(); closeModal(); render();
 }
 function toggleGoal(member,id) {
-  const g=state.objectives[member].goals.find(x=>x.id===id); if(g) g.done=!g.done;
+  const g=state.objectives[member].goals.find(x=>x.id===id); if(!g) return;
+  g.done=!g.done;
+  if(g.assignee==='Ambos') {
+    const other=member==='member1'?'member2':'member1';
+    const og=state.objectives[other].goals.find(x=>x.text===g.text&&x.assignee==='Ambos');
+    if(og) og.done=g.done;
+  }
   save(); render();
 }
 function delGoal(member,id) { state.objectives[member].goals=state.objectives[member].goals.filter(g=>g.id!==id); save(); render(); }
@@ -2774,7 +2780,13 @@ function addFutureGoal(member, monISO, offset) {
 }
 function toggleFutureGoal(monISO, member, id) {
   const fw=getFutureWeek(monISO); if(!fw) return;
-  const g=fw[member].goals.find(x=>x.id===id); if(g) g.done=!g.done;
+  const g=fw[member].goals.find(x=>x.id===id); if(!g) return;
+  g.done=!g.done;
+  if(g.assignee==='Ambos') {
+    const other=member==='member1'?'member2':'member1';
+    const og=fw[other].goals.find(x=>x.text===g.text&&x.assignee==='Ambos');
+    if(og) og.done=g.done;
+  }
   save(); render();
 }
 function delFutureGoal(monISO, member, id) {
