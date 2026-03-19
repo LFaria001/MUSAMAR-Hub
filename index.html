@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773826777';
+var APP_V='t1773907993';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -972,7 +972,15 @@ function deductInventoryForOrder(order) {
   if(order._stockDeducted) return;
   (order.items||[]).forEach(item=>{
     const packQty=parseFloat(item.qty)||0;
-    // New format: item.dates is array of {flavorId, qty}
+    // Deduct packaging items for this pack
+    const pack=(state.packs||[]).find(p=>p.id===item.packId||p.size==item.packSize);
+    if(pack&&pack.packagingItems) {
+      pack.packagingItems.forEach(pi=>{
+        const inv=(state.inventory||[]).find(i=>i.id===pi.inventoryId);
+        if(inv) { inv.qtyUsed=(parseFloat(inv.qtyUsed)||0)+(pi.qty*packQty); }
+      });
+    }
+    // Deduct ingredient items
     const dates=item.dates||[];
     if(dates.length) {
       dates.forEach(d=>{
@@ -985,7 +993,6 @@ function deductInventoryForOrder(order) {
         });
       });
     } else if(item.flavorId) {
-      // backward compat: old single-flavor items
       const flavor=(state.flavors||[]).find(f=>f.id===item.flavorId);
       if(!flavor||!flavor.recipe) return;
       const totalUnits=packQty*(parseFloat(item.packSize)||0);
@@ -998,24 +1005,69 @@ function deductInventoryForOrder(order) {
   order._stockDeducted=true;
 }
 
+function packPkgRow(r, inv) {
+  r=r||{};
+  inv=inv||(state.inventory||[]).filter(i=>i.category==='Embalagem'||i.category==='Rótulos');
+  return `<div class="pkg-row" style="display:grid;grid-template-columns:2fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+    <div class="form-group" style="margin:0"><label class="label">Item</label><select class="input f-pkg-inv" onchange="calcPackPkgTotal()">
+      <option value="">—</option>
+      ${inv.map(i=>`<option value="${i.id}" ${r.inventoryId===i.id?'selected':''}>${esc(i.name)} (${i.costPerUnit?fmt(i.costPerUnit)+'/'+esc(i.unit||'un'):'sem preço'})</option>`).join('')}
+    </select></div>
+    <div class="form-group" style="margin:0"><label class="label">Qtd/pack</label><input class="input f-pkg-qty" type="number" step="1" value="${r.qty||1}" onchange="calcPackPkgTotal()"></div>
+    <button class="del-btn" onclick="this.closest('.pkg-row').remove();calcPackPkgTotal()" style="margin-bottom:4px">✕</button>
+  </div>`;
+}
+function addPackPkgRow() {
+  const inv=(state.inventory||[]).filter(i=>i.category==='Embalagem'||i.category==='Rótulos');
+  const div=document.createElement('div');
+  div.innerHTML=packPkgRow({},inv);
+  document.getElementById('f-pack-pkglist').appendChild(div.firstElementChild);
+}
+function calcPackPkgTotal() {
+  let total=0;
+  document.querySelectorAll('#f-pack-pkglist .pkg-row').forEach(row=>{
+    const invId=row.querySelector('.f-pkg-inv').value;
+    const qty=parseFloat(row.querySelector('.f-pkg-qty').value)||0;
+    const inv=(state.inventory||[]).find(i=>i.id===invId);
+    if(inv&&inv.costPerUnit) total+=inv.costPerUnit*qty;
+  });
+  const el=document.getElementById('f-pack-pkg');
+  if(el) el.value=total.toFixed(2);
+  const lbl=document.getElementById('f-pack-pkg-calc');
+  if(lbl) lbl.textContent=total>0?`= ${fmt(total)}`:'';
+}
+
 function openPackModal(editId) {
   const p=editId?(state.packs||[]).find(x=>x.id===editId):null;
+  const pkgInv=(state.inventory||[]).filter(i=>i.category==='Embalagem'||i.category==='Rótulos');
+  const pkgItems=p?(p.packagingItems||[]):[];
   openModal(p?'Editar Pack':'Novo Pack', `
     <div class="form-group"><label class="label">Tamanho (nº tâmaras)</label><input class="input" type="number" id="f-pack-size" value="${p?p.size:''}" placeholder="3, 6 ou 10"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label class="label">Preço de venda (€)</label><input class="input" type="number" step="0.01" id="f-pack-price" value="${p?p.salePrice:''}" placeholder="Preço fixo do pack"></div>
-      <div class="form-group"><label class="label">Embalagem (€)</label><input class="input" type="number" step="0.01" id="f-pack-pkg" value="${p?p.packagingCost:''}"></div>
+    <div class="form-group"><label class="label">Preço de venda (€)</label><input class="input" type="number" step="0.01" id="f-pack-price" value="${p?p.salePrice:''}" placeholder="Preço fixo do pack"></div>
+    <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;font-weight:600;display:flex;align-items:center;justify-content:space-between">
+      Embalagem / Rótulos <span id="f-pack-pkg-calc" style="color:var(--dim);font-weight:400"></span>
     </div>
+    <div id="f-pack-pkglist">${pkgItems.map(r=>packPkgRow(r,pkgInv)).join('')}</div>
+    <button class="btn btn-ghost btn-full" onclick="addPackPkgRow()" style="margin-bottom:8px">+ Adicionar Item</button>
+    <input type="hidden" id="f-pack-pkg" value="${p?p.packagingCost:'0'}">
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary btn-full" onclick="savePack('${editId||''}')">${p?'Guardar':'Criar Pack'}</button>
       ${p?`<button class="btn btn-ghost" onclick="delPack('${p.id}')" style="color:var(--red)">Eliminar</button>`:''}
     </div>
   `);
+  setTimeout(()=>calcPackPkgTotal(),50);
 }
 
 function savePack(editId) {
   const size=parseInt($('#f-pack-size').value); if(!size) return;
-  const data={ size, salePrice:parseFloat($('#f-pack-price').value)||0, packagingCost:parseFloat($('#f-pack-pkg').value)||0 };
+  // Collect packaging items
+  const packagingItems=[];
+  document.querySelectorAll('#f-pack-pkglist .pkg-row').forEach(row=>{
+    const invId=row.querySelector('.f-pkg-inv').value;
+    const qty=parseFloat(row.querySelector('.f-pkg-qty').value)||0;
+    if(invId&&qty>0) packagingItems.push({inventoryId:invId,qty});
+  });
+  const data={ size, salePrice:parseFloat($('#f-pack-price').value)||0, packagingCost:parseFloat($('#f-pack-pkg').value)||0, packagingItems };
   if(!state.packs) state.packs=[];
   if(editId) { const p=state.packs.find(x=>x.id===editId); if(p) Object.assign(p,data); }
   else { data.id=uid(); state.packs.push(data); }
