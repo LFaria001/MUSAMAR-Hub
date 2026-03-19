@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773907993';
+var APP_V='t1773909397';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -977,7 +977,7 @@ function deductInventoryForOrder(order) {
     if(pack&&pack.packagingItems) {
       pack.packagingItems.forEach(pi=>{
         const inv=(state.inventory||[]).find(i=>i.id===pi.inventoryId);
-        if(inv) { inv.qtyUsed=(parseFloat(inv.qtyUsed)||0)+(pi.qty*packQty); }
+        if(inv) { inv.qtyUsed=Math.round(((parseFloat(inv.qtyUsed)||0)+(pi.qty*packQty))*100)/100; }
       });
     }
     // Deduct ingredient items
@@ -989,7 +989,7 @@ function deductInventoryForOrder(order) {
         const totalUnits=d.qty*packQty;
         flavor.recipe.forEach(r=>{
           const inv=(state.inventory||[]).find(i=>i.id===r.inventoryId);
-          if(inv) { inv.qtyUsed=(parseFloat(inv.qtyUsed)||0)+(r.qty*totalUnits); }
+          if(inv) { inv.qtyUsed=Math.round(((parseFloat(inv.qtyUsed)||0)+(r.qty*totalUnits))*100)/100; }
         });
       });
     } else if(item.flavorId) {
@@ -998,7 +998,7 @@ function deductInventoryForOrder(order) {
       const totalUnits=packQty*(parseFloat(item.packSize)||0);
       flavor.recipe.forEach(r=>{
         const inv=(state.inventory||[]).find(i=>i.id===r.inventoryId);
-        if(inv) { inv.qtyUsed=(parseFloat(inv.qtyUsed)||0)+(r.qty*totalUnits); }
+        if(inv) { inv.qtyUsed=Math.round(((parseFloat(inv.qtyUsed)||0)+(r.qty*totalUnits))*100)/100; }
       });
     }
   });
@@ -1468,10 +1468,10 @@ function saveInv(editId) {
   }
   const data={
     name, category:$('#f-inv-cat').value, unit:$('#f-inv-unit').value,
-    supplier, costPerUnit:parseFloat($('#f-inv-cost').value)||0,
-    qtyReceived:parseFloat($('#f-inv-received').value)||0,
-    qtyUsed:editId?parseFloat($('#f-inv-used').value)||0:0,
-    qtyWasted:editId?parseFloat($('#f-inv-wasted').value)||0:0,
+    supplier, costPerUnit:Math.round((parseFloat($('#f-inv-cost').value)||0)*100)/100,
+    qtyReceived:Math.round((parseFloat($('#f-inv-received').value)||0)*100)/100,
+    qtyUsed:editId?Math.round((parseFloat($('#f-inv-used').value)||0)*100)/100:0,
+    qtyWasted:editId?Math.round((parseFloat($('#f-inv-wasted').value)||0)*100)/100:0,
     expirationDate:$('#f-inv-exp').value||''
   };
   if(!state.inventory) state.inventory=[];
@@ -1586,16 +1586,16 @@ function confirmReceiptItems() {
     if(!it._checked||!it.name) return;
     const existing=(state.inventory||[]).find(inv=>inv.name.toLowerCase().trim()===it.name.toLowerCase().trim());
     if(existing) {
-      existing.qtyReceived=(parseFloat(existing.qtyReceived)||0)+(parseFloat(it.qtyReceived)||0);
-      if(it.costPerUnit) existing.costPerUnit=parseFloat(it.costPerUnit)||existing.costPerUnit;
+      existing.qtyReceived=Math.round(((parseFloat(existing.qtyReceived)||0)+(parseFloat(it.qtyReceived)||0))*100)/100;
+      if(it.costPerUnit) existing.costPerUnit=Math.round((parseFloat(it.costPerUnit)||existing.costPerUnit)*100)/100;
       if(it.supplier) existing.supplier=it.supplier;
       if(it.category&&it.category!=='Outro') existing.category=it.category;
       updated++;
     } else {
       state.inventory.push({
         id:uid(), name:it.name, category:it.category||'Outro', unit:it.unit||'un',
-        supplier:it.supplier||'', costPerUnit:parseFloat(it.costPerUnit)||0,
-        qtyReceived:parseFloat(it.qtyReceived)||0, qtyUsed:0, qtyWasted:0,
+        supplier:it.supplier||'', costPerUnit:Math.round((parseFloat(it.costPerUnit)||0)*100)/100,
+        qtyReceived:Math.round((parseFloat(it.qtyReceived)||0)*100)/100, qtyUsed:0, qtyWasted:0,
         minStock:0, expirationDate:'', createdAt:Date.now()
       });
       added++;
