@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773909397';
+var APP_V='t1773910209';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -1389,7 +1389,7 @@ function renderInventory(el) {
   el.innerHTML=`
     <div class="section-header">
       <div><h1>Inventário</h1><div class="sub">${items.length} itens${low.length?' · <span style="color:var(--red)">'+low.length+' stock baixo</span>':''}</div></div>
-      <div style="display:flex;gap:8px"><button class="btn btn-ghost" onclick="startReceiptScan()">📷 Scan Recibo</button><button class="btn btn-primary" onclick="openInvModal()">+ Novo Item</button></div>
+      <div style="display:flex;gap:8px"><button class="btn btn-ghost" onclick="startReceiptScan()">📷 Scan Recibo</button><button class="btn btn-ghost" onclick="openRestockModal()">+ Reforçar</button><button class="btn btn-primary" onclick="openInvModal()">+ Novo Item</button></div>
     </div>
     ${items.length?`<div class="card" style="padding:0;overflow-x:auto"><table class="data-table">
       <thead><tr><th>Material</th><th>Categoria</th><th>Stock</th><th>Mín.</th><th>Estado</th><th>Desperdício</th><th>Custo/un</th><th>Total gasto</th></tr></thead>
@@ -1477,13 +1477,78 @@ function saveInv(editId) {
   if(!state.inventory) state.inventory=[];
   if(editId) {
     const i=state.inventory.find(x=>x.id===editId);
-    if(i) { data.minStock=i.minStock||0; Object.assign(i,data); }
+    if(i) { const oldPrice=i.costPerUnit; data.minStock=i.minStock||0; Object.assign(i,data); if(data.costPerUnit!==oldPrice) propagateInvPriceToFlavors(editId); }
   } else {
     data.id=uid(); data.createdAt=Date.now(); data.minStock=0; state.inventory.push(data);
   }
   save(); closeModal(); render();
 }
 function delInv(id) { state.inventory=(state.inventory||[]).filter(x=>x.id!==id); save(); closeModal(); render(); }
+
+function openRestockModal() {
+  const items=state.inventory||[];
+  if(!items.length) { toast('Adiciona primeiro itens ao inventário.'); return; }
+  openModal('Reforçar Stock', `
+    <div class="form-group"><label class="label">Item</label><select class="input" id="f-restock-item" onchange="onRestockItemChange()">
+      <option value="">— Selecionar —</option>
+      ${items.map(i=>`<option value="${i.id}">${esc(i.name)} (${esc(i.category||'')}) — stock: ${invCurrentStock(i)} ${esc(i.unit||'un')}</option>`).join('')}
+    </select></div>
+    <div id="f-restock-details" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group"><label class="label">Quantidade a adicionar</label><input class="input" type="number" step="0.01" id="f-restock-qty" placeholder="Ex: 2"></div>
+        <div class="form-group"><label class="label">Novo preço (€/<span id="f-restock-unit">un</span>)</label><input class="input" type="number" step="0.01" id="f-restock-price" placeholder="Deixa vazio para manter"></div>
+      </div>
+      <div id="f-restock-info" style="font-size:11px;color:var(--dim);margin-bottom:12px"></div>
+    </div>
+    <button class="btn btn-primary btn-full" onclick="saveRestock()">Reforçar</button>
+  `);
+}
+function onRestockItemChange() {
+  const id=$('#f-restock-item').value;
+  const det=document.getElementById('f-restock-details');
+  if(!id) { det.style.display='none'; return; }
+  det.style.display='block';
+  const item=(state.inventory||[]).find(i=>i.id===id);
+  if(item) {
+    document.getElementById('f-restock-unit').textContent=item.unit||'un';
+    document.getElementById('f-restock-price').placeholder=item.costPerUnit?'Atual: '+fmt(item.costPerUnit):'Sem preço';
+    document.getElementById('f-restock-info').textContent=item.supplier?'Fornecedor: '+item.supplier:'';
+  }
+}
+function saveRestock() {
+  const id=$('#f-restock-item').value; if(!id) return;
+  const item=(state.inventory||[]).find(i=>i.id===id); if(!item) return;
+  const qty=Math.round((parseFloat($('#f-restock-qty').value)||0)*100)/100;
+  if(qty<=0) { toast('Introduz uma quantidade válida.'); return; }
+  const newPrice=$('#f-restock-price').value.trim();
+  item.qtyReceived=Math.round(((parseFloat(item.qtyReceived)||0)+qty)*100)/100;
+  if(newPrice!=='') {
+    const oldPrice=item.costPerUnit;
+    item.costPerUnit=Math.round((parseFloat(newPrice)||0)*100)/100;
+    if(item.costPerUnit!==oldPrice) propagateInvPriceToFlavors(item.id);
+  }
+  save(); closeModal(); render();
+  toast(`+${qty} ${item.unit||'un'} de ${item.name} adicionado ao stock.`);
+}
+
+function propagateInvPriceToFlavors(invId) {
+  const inv=(state.inventory||[]).find(i=>i.id===invId); if(!inv) return;
+  (state.flavors||[]).forEach(f=>{
+    ['date','filling','topping'].forEach(key=>{
+      const iKey=key+'InvId', gKey=key+'Grams', cKey=key+'Cost';
+      if(f[iKey]===invId&&f[gKey]) {
+        const unit=(inv.unit||'un').toLowerCase();
+        let cost=0;
+        if(unit==='kg') cost=inv.costPerUnit*(f[gKey]/1000);
+        else if(unit==='g') cost=inv.costPerUnit*f[gKey];
+        else if(unit==='l') cost=inv.costPerUnit*(f[gKey]/1000);
+        else if(unit==='ml') cost=inv.costPerUnit*f[gKey];
+        else cost=inv.costPerUnit*f[gKey];
+        f[cKey]=Math.round(cost*1000)/1000;
+      }
+    });
+  });
+}
 
 // ===== RECEIPT SCANNER =====
 function startReceiptScan() {
