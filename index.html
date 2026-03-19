@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773910209';
+var APP_V='t1773910461';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -2119,7 +2119,10 @@ function renderAnalytics(el) {
     filteredExpenses=allExpenses.filter(i=>i.date&&i.date>=q);
   }
   const totalExpenses=filteredExpenses.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
-  const netProfit=totalProfit-totalExpenses;
+  // Custo total do inventário comprado (receita vs investimento real)
+  const invItems=state.inventory||[];
+  const totalInvCost=invItems.reduce((s,i)=>s+(parseFloat(i.qtyReceived)||0)*(parseFloat(i.costPerUnit)||0),0);
+  const netProfit=totalRev-totalInvCost-totalExpenses;
 
   // ── 2. Comparativo mensal (últimos 12 meses) ──
   const monthlyData={};
@@ -2306,7 +2309,7 @@ function renderAnalytics(el) {
     <!-- KPIs PRINCIPAIS -->
     <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
       <div class="kpi-card"><div class="kpi-label">Receita</div><div class="kpi-value" style="color:var(--green)">${fmt(totalRev)}</div><div class="kpi-sub">${filtered.length} encomendas</div></div>
-      <div class="kpi-card"><div class="kpi-label">Lucro Bruto</div><div class="kpi-value" style="color:${totalProfit>=0?'var(--green)':'var(--red)'}">${fmt(totalProfit)}</div><div class="kpi-sub">Margem ${avgMargin.toFixed(1)}%</div></div>
+      <div class="kpi-card"><div class="kpi-label">Investimento Inv.</div><div class="kpi-value" style="color:var(--red)">${fmt(totalInvCost)}</div><div class="kpi-sub">${invItems.length} materiais</div></div>
       <div class="kpi-card"><div class="kpi-label">Despesas Op.</div><div class="kpi-value" style="color:var(--red)">${fmt(totalExpenses)}</div><div class="kpi-sub">${filteredExpenses.length} registos</div></div>
       <div class="kpi-card"><div class="kpi-label">Lucro Líquido</div><div class="kpi-value" style="color:${netProfit>=0?'var(--gold)':'var(--red)'}">${fmt(netProfit)}</div><div class="kpi-sub">${totalRev>0?(netProfit/totalRev*100).toFixed(1)+'%':'-'} margem líq.</div></div>
       <div class="kpi-card"><div class="kpi-label">Ticket Médio</div><div class="kpi-value">${fmt(avgTicket)}</div></div>
