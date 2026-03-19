@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773910781';
+var APP_V='t1773910982';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -208,7 +208,8 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 
 /* ===== KPI GRID ===== */
 .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; margin-bottom:14px; }
-.kpi-card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+.kpi-card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px 12px; cursor:pointer; transition:border-color 0.15s; }
+.kpi-card:active { border-color:var(--gold); }
 .kpi-label { font-size:9px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:2px; }
 .kpi-value { font-size:18px; font-family:var(--font-display); font-weight:400; color:var(--text); }
 .kpi-sub { font-size:10px; color:var(--dim); margin-top:2px; }
@@ -2077,6 +2078,15 @@ async function sendChat() {
 }
 
 // ===== ANALYTICS =====
+function showKpiInfo(title,desc,value) {
+  openModal(title, `
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:28px;font-family:var(--font-display);color:var(--gold);margin-bottom:8px">${value}</div>
+    </div>
+    <p style="font-size:13px;color:var(--muted);line-height:1.6;white-space:pre-line">${desc}</p>
+    <button class="btn btn-ghost btn-full" onclick="closeModal()" style="margin-top:16px">Fechar</button>
+  `);
+}
 let analyticsPeriod='all';
 function renderAnalytics(el) {
   const orders=(state.orders||[]).filter(o=>o.status!=='cancelado');
@@ -2308,14 +2318,14 @@ function renderAnalytics(el) {
 
     <!-- KPIs PRINCIPAIS -->
     <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
-      <div class="kpi-card"><div class="kpi-label">Receita</div><div class="kpi-value" style="color:var(--green)">${fmt(totalRev)}</div><div class="kpi-sub">${filtered.length} encomendas</div></div>
-      <div class="kpi-card"><div class="kpi-label">Custo Vendas</div><div class="kpi-value" style="color:var(--red)">${fmt(totalCost)}</div><div class="kpi-sub">ingredientes + emb.</div></div>
-      <div class="kpi-card"><div class="kpi-label">Lucro Bruto</div><div class="kpi-value" style="color:${totalProfit>=0?'var(--green)':'var(--red)'}">${fmt(totalProfit)}</div><div class="kpi-sub">Margem ${avgMargin.toFixed(1)}%</div></div>
-      <div class="kpi-card"><div class="kpi-label">Investimento Inv.</div><div class="kpi-value" style="color:var(--red)">${fmt(totalInvCost)}</div><div class="kpi-sub">${invItems.length} materiais</div></div>
-      <div class="kpi-card"><div class="kpi-label">Despesas Op.</div><div class="kpi-value" style="color:var(--red)">${fmt(totalExpenses)}</div><div class="kpi-sub">${filteredExpenses.length} registos</div></div>
-      <div class="kpi-card"><div class="kpi-label">Lucro Líquido</div><div class="kpi-value" style="color:${netProfit>=0?'var(--gold)':'var(--red)'}">${fmt(netProfit)}</div><div class="kpi-sub">${totalRev>0?(netProfit/totalRev*100).toFixed(1)+'%':'-'} margem líq.</div></div>
-      <div class="kpi-card"><div class="kpi-label">Ticket Médio</div><div class="kpi-value">${fmt(avgTicket)}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Unidades</div><div class="kpi-value">${Math.round(totalUnits)}</div><div class="kpi-sub">tâmaras vendidas</div></div>
+      <div class="kpi-card" onclick="showKpiInfo('Receita','Total de vendas realizadas no período selecionado.','${fmt(totalRev)}')"><div class="kpi-label">Receita</div><div class="kpi-value" style="color:var(--green)">${fmt(totalRev)}</div><div class="kpi-sub">${filtered.length} encomendas</div></div>
+      <div class="kpi-card" onclick="showKpiInfo('Custo das Vendas','Custo dos ingredientes e embalagem das encomendas que foram efetivamente vendidas. Só conta o que saiu para clientes.','${fmt(totalCost)}')"><div class="kpi-label">Custo Vendas</div><div class="kpi-value" style="color:var(--red)">${fmt(totalCost)}</div><div class="kpi-sub">ingredientes + emb.</div></div>
+      <div class="kpi-card" onclick="showKpiInfo('Lucro Bruto','Receita menos o custo das vendas. Mostra a margem que ganhas por cada venda, sem contar despesas gerais.\\n\\nFórmula: Receita − Custo Vendas','${fmt(totalProfit)} (${avgMargin.toFixed(1)}%)')"><div class="kpi-label">Lucro Bruto</div><div class="kpi-value" style="color:${totalProfit>=0?'var(--green)':'var(--red)'}">${fmt(totalProfit)}</div><div class="kpi-sub">Margem ${avgMargin.toFixed(1)}%</div></div>
+      <div class="kpi-card" onclick="showKpiInfo('Investimento em Inventário','Total gasto a comprar materiais (quantidade recebida × preço por unidade). Este valor entra mesmo antes de venderes — representa dinheiro que já saiu do bolso.','${fmt(totalInvCost)} (${invItems.length} materiais)')"><div class="kpi-label">Investimento Inv.</div><div class="kpi-value" style="color:var(--red)">${fmt(totalInvCost)}</div><div class="kpi-sub">${invItems.length} materiais</div></div>
+      <div class="kpi-card" onclick="showKpiInfo('Despesas Operacionais','Despesas registadas manualmente nas Finanças (saídas). Inclui custos como transporte, marketing, etc.','${fmt(totalExpenses)} (${filteredExpenses.length} registos)')"><div class="kpi-label">Despesas Op.</div><div class="kpi-value" style="color:var(--red)">${fmt(totalExpenses)}</div><div class="kpi-sub">${filteredExpenses.length} registos</div></div>
+      <div class="kpi-card" onclick="showKpiInfo('Lucro Líquido','O resultado real do negócio: dinheiro que entrou menos tudo o que saiu. Se for negativo, gastaste mais do que vendeste.\\n\\nFórmula: Receita − Investimento Inv. − Despesas Op.','${fmt(netProfit)} (${totalRev>0?(netProfit/totalRev*100).toFixed(1)+'%':'-'} margem)')"><div class="kpi-label">Lucro Líquido</div><div class="kpi-value" style="color:${netProfit>=0?'var(--gold)':'var(--red)'}">${fmt(netProfit)}</div><div class="kpi-sub">${totalRev>0?(netProfit/totalRev*100).toFixed(1)+'%':'-'} margem líq.</div></div>
+      <div class="kpi-card" onclick="showKpiInfo('Ticket Médio','Valor médio gasto por encomenda. Quanto maior, melhor — significa que os clientes compram mais por pedido.','${fmt(avgTicket)}')"><div class="kpi-label">Ticket Médio</div><div class="kpi-value">${fmt(avgTicket)}</div></div>
+      <div class="kpi-card" onclick="showKpiInfo('Unidades Vendidas','Número total de tâmaras vendidas no período. Útil para perceber o volume de produção necessário.','${Math.round(totalUnits)} tâmaras')"><div class="kpi-label">Unidades</div><div class="kpi-value">${Math.round(totalUnits)}</div><div class="kpi-sub">tâmaras vendidas</div></div>
     </div>
 
     <!-- PROJEÇÃO DO MÊS -->
