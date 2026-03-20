@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1773942095';
+var APP_V='t1774016929';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -12,7 +12,7 @@ fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.
   else APP_UPDATE_STATUS='updated';
 }).catch(function(){ APP_UPDATE_STATUS='offline'; });
 </script>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#4d2c14">
@@ -108,7 +108,8 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 .dash-summary { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
 .dash-summary-title { font-size: 9px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
 .dash-items { display: flex; flex-direction: column; gap: 0; }
-.dash-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(42,34,24,0.6); cursor: pointer; }
+.dash-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(42,34,24,0.6); cursor: pointer; transition: opacity 0.15s; }
+.dash-item:active { opacity: 0.7; }
 .dash-item:last-child { border-bottom: none; padding-bottom: 0; }
 .dash-item:first-child { padding-top: 0; }
 .dash-item .di-icon { font-size: 16px; width: 22px; text-align: center; flex-shrink: 0; }
@@ -128,6 +129,10 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 
 .close-btn { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; padding: 4px; }
 .del-btn { background: none; border: none; color: var(--faint); cursor: pointer; font-size: 13px; }
+
+/* ===== TOAST ===== */
+.toast { position: fixed; bottom: calc(20px + var(--safe-bottom)); left: 50%; transform: translateX(-50%) translateY(20px); background: var(--gold-dark); color: var(--bg); padding: 10px 20px; border-radius: 8px; font-size: 12px; font-family: var(--font-body); letter-spacing: 0.3px; z-index: 999; opacity: 0; transition: all 0.3s ease; pointer-events: none; max-width: 90vw; text-align: center; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ===== MODAL ===== */
 .modal-overlay { position: fixed; inset: 0; background: rgba(77,44,20,0.45); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
@@ -208,8 +213,9 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 
 /* ===== KPI GRID ===== */
 .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:8px; margin-bottom:14px; }
-.kpi-card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px 12px; cursor:pointer; transition:border-color 0.15s; }
-.kpi-card:active { border-color:var(--gold); }
+.kpi-card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px 12px; cursor:pointer; transition:all 0.15s; }
+.kpi-card:hover { border-color:var(--gold); transform:translateY(-1px); box-shadow:0 2px 8px rgba(77,44,20,0.08); }
+.kpi-card:active { border-color:var(--gold); transform:translateY(0); }
 .kpi-label { font-size:9px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:2px; }
 .kpi-value { font-size:18px; font-family:var(--font-display); font-weight:400; color:var(--text); }
 .kpi-sub { font-size:10px; color:var(--dim); margin-top:2px; }
@@ -292,19 +298,19 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 </head>
 <body>
 
-<!-- IDENTITY SCREEN -->
-<div id="identity-screen" style="position:fixed;inset:0;background:var(--bg);z-index:200;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;display:none">
+<!-- LOGIN SCREEN -->
+<div id="login-screen" style="position:fixed;inset:0;background:var(--bg);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center">
   <h1 style="font-family:var(--font-display);font-size:36px;color:var(--gold);letter-spacing:6px;margin-bottom:8px">MUSAMAR</h1>
   <p style="font-size:11px;color:var(--muted);letter-spacing:3px;text-transform:uppercase;margin-bottom:48px">Business Hub</p>
-  <p style="font-size:14px;color:var(--text);margin-bottom:24px">Quem és tu?</p>
-  <div style="display:flex;flex-direction:column;gap:14px;width:100%;max-width:280px">
-    <button onclick="pickIdentity('farifari')" style="padding:16px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--gold);font-family:var(--font-display);font-size:20px;font-weight:500;cursor:pointer;letter-spacing:2px;transition:all 0.2s">farifari</button>
-    <button onclick="pickIdentity('Mariah Crispy')" style="padding:16px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--gold);font-family:var(--font-display);font-size:20px;font-weight:500;cursor:pointer;letter-spacing:2px;transition:all 0.2s">Mariah Crispy</button>
+  <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:280px">
+    <button id="login-btn" onclick="handleGoogleLogin()" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-family:var(--font-body);font-size:14px;cursor:pointer;transition:all 0.2s;letter-spacing:0.3px"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>Entrar com Google</button>
+    <p id="login-error" style="font-size:12px;color:var(--red);display:none;margin-top:4px;text-align:center"></p>
   </div>
 </div>
 
@@ -329,6 +335,7 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   <aside class="sidebar">
     <div class="sidebar-brand"><h1>MUSAMAR</h1><span>Business Hub</span></div>
     <nav id="sidebar-nav"></nav>
+    <button onclick="handleLogout()" style="margin:16px 24px 0;padding:10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-family:var(--font-body);letter-spacing:0.5px;cursor:pointer;transition:all 0.15s" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">Sair</button>
     <div class="version">v1.0 — 2026</div>
   </aside>
   <!-- MAIN -->
@@ -343,6 +350,9 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   <div class="tab-menu">
     <div class="tab-menu-title">SECÇÕES</div>
     <div class="tab-menu-grid" id="tab-menu-grid"></div>
+    <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
+      <button onclick="handleLogout();closeTabMenu()" class="tab-menu-item" style="width:100%;color:var(--red)"><span class="tmi-icon">↩</span><span class="tmi-label" style="color:var(--red)">Sair</span></button>
+    </div>
   </div>
 </div>
 
@@ -410,24 +420,50 @@ firebase.initializeApp({
   messagingSenderId: "429342019448",
   appId: "1:429342019448:web:3342971f2f08093420028d"
 });
+const auth = firebase.auth();
 const db = firebase.firestore();
 const stateRef = db.collection('hub').doc('state');
 const CLOUDINARY_CLOUD = 'di4ee9gm1';
 const CLOUDINARY_UPLOAD_URL = 'https://api.cloudinary.com/v1_1/di4ee9gm1/auto/upload';
 
+// Google email → display name mapping
+const EMAIL_MAP = {
+  'lmvfaria001@gmail.com': 'farifari',
+  'mariiagoncalves022@gmail.com': 'Mariah Crispy'
+};
+const ALLOWED_EMAILS = Object.keys(EMAIL_MAP);
+let chatUser = '';
+
+// Google Sign-In handler
+function handleGoogleLogin() {
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('login-error');
+  btn.disabled = true; btn.textContent = 'A entrar...';
+  err.style.display = 'none';
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).then(function(result) {
+    if (!ALLOWED_EMAILS.includes(result.user.email)) {
+      result.user.delete();
+      err.textContent = 'Esta conta não tem acesso.';
+      err.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Entrar com Google';
+    }
+  }).catch(function(error) {
+    if (error.code !== 'auth/popup-closed-by-user') {
+      err.textContent = 'Erro ao entrar. Tenta novamente.';
+      err.style.display = 'block';
+    }
+    btn.disabled = false; btn.textContent = 'Entrar com Google';
+  });
+}
+
+function handleLogout() {
+  if (confirm('Tens a certeza que queres sair?')) auth.signOut();
+}
+
 // Load from localStorage first (instant display)
 function loadLocal() { try { const d = localStorage.getItem('musamar-hub'); if(d) { const p = JSON.parse(d); Object.assign(state, p); } } catch(e){} }
 function saveLocal() { localStorage.setItem('musamar-hub', JSON.stringify(state)); }
-loadLocal();
-
-// Migrate: remove old base64 photo data from chat messages (too large for Firestore)
-(function migratePhotos(){
-  let changed=false;
-  state.chat.forEach(m=>{
-    if(m.photo && m.photo.startsWith('data:')){ m.photo=''; changed=true; }
-  });
-  if(changed) saveLocal();
-})();
 
 // Save to Firestore
 function save() {
@@ -457,37 +493,60 @@ function save() {
   }).catch(e => console.warn('Firestore save error:', e));
 }
 
-// Real-time sync
-let initialLoad = true;
-stateRef.onSnapshot(snap => {
-  if(snap.metadata.hasPendingWrites) return;
-  if(!snap.exists) { save(); return; }
-  const data = snap.data();
-  const prevChatLen = state.chat ? state.chat.length : 0;
-  state.inspiration = data.inspiration || [];
-  state.recipes = data.recipes || [];
-  state.finances = data.finances || [];
-  state.brandAssets = data.brandAssets || [];
-  state.chat = data.chat || [];
-  state.objectives = data.objectives || DEFAULT.objectives;
-  state.weekLabel = data.weekLabel || '';
-  state.weekEnd = data.weekEnd || '';
-  state.futureWeeks = data.futureWeeks || [];
-  state.accountability = data.accountability || [];
-  state.calendar = data.calendar || [];
-  state.notes = data.notes || [];
-  state.flavors = data.flavors || [];
-  state.packs = data.packs || [];
-  state.orders = data.orders || [];
-  state.customers = data.customers || [];
-  state.inventory = data.inventory || [];
-  state.feedback = data.feedback || [];
-  state.orderSeq = data.orderSeq || 0;
-  saveLocal();
-  render();
-  // Chat notification handled by FCM push — no inline notification needed
-  initialLoad = false;
-}, err => console.warn('Firestore listen error:', err));
+// Auth state listener — controls app access
+let firestoreUnsub = null;
+auth.onAuthStateChanged(function(user) {
+  if (user) {
+    if (!ALLOWED_EMAILS.includes(user.email)) { user.delete(); auth.signOut(); return; }
+    chatUser = EMAIL_MAP[user.email] || user.email;
+    document.getElementById('login-screen').style.display = 'none';
+    // Load local data first for instant display
+    loadLocal();
+    // Migrate: remove old base64 photo data
+    (function(){
+      let changed=false;
+      state.chat.forEach(m=>{ if(m.photo && m.photo.startsWith('data:')){ m.photo=''; changed=true; } });
+      if(changed) saveLocal();
+    })();
+    render();
+    // Start Firestore real-time sync
+    let initialLoad = true;
+    firestoreUnsub = stateRef.onSnapshot(snap => {
+      if(snap.metadata.hasPendingWrites) return;
+      if(!snap.exists) { save(); return; }
+      const data = snap.data();
+      state.inspiration = data.inspiration || [];
+      state.recipes = data.recipes || [];
+      state.finances = data.finances || [];
+      state.brandAssets = data.brandAssets || [];
+      state.chat = data.chat || [];
+      state.objectives = data.objectives || DEFAULT.objectives;
+      state.weekLabel = data.weekLabel || '';
+      state.weekEnd = data.weekEnd || '';
+      state.futureWeeks = data.futureWeeks || [];
+      state.accountability = data.accountability || [];
+      state.calendar = data.calendar || [];
+      state.notes = data.notes || [];
+      state.flavors = data.flavors || [];
+      state.packs = data.packs || [];
+      state.orders = data.orders || [];
+      state.customers = data.customers || [];
+      state.inventory = data.inventory || [];
+      state.feedback = data.feedback || [];
+      state.orderSeq = data.orderSeq || 0;
+      saveLocal();
+      render();
+      initialLoad = false;
+    }, err => console.warn('Firestore listen error:', err));
+    // Init notifications
+    requestNotifications();
+    saveFCMToken();
+  } else {
+    chatUser = '';
+    if (firestoreUnsub) { firestoreUnsub(); firestoreUnsub = null; }
+    document.getElementById('login-screen').style.display = 'flex';
+  }
+});
 
 // ===== NOTIFICATIONS + FCM =====
 const notifSupported = ('Notification' in window);
@@ -499,7 +558,6 @@ async function initFCM() {
   try {
     fcmMessaging = firebase.messaging();
     fcmSwReg = await navigator.serviceWorker.register('firebase-messaging-sw.js');
-    console.log('FCM SW registered:', fcmSwReg.scope);
   } catch(e) { console.warn('FCM init error:', e); }
 }
 initFCM();
@@ -561,11 +619,25 @@ const nowTime=()=>new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'
 const uid=()=>Date.now()+Math.random().toString(36).slice(2,6);
 
 function openModal(title, content) {
-  $('#modal-content').innerHTML = `<div class="modal-head"><h2>${title}</h2><button class="close-btn" onclick="closeModal()">✕</button></div><div>${content}</div>`;
+  $('#modal-content').innerHTML = `<div class="modal-head"><h2>${title}</h2><button class="close-btn" onclick="closeModal()" aria-label="Fechar">✕</button></div><div>${content}</div>`;
   $('#modal-overlay').classList.add('open');
+  var modal = $('#modal-content');
+  var first = modal.querySelector('button, input, select, textarea, a[href]');
+  if (first) setTimeout(function() { first.focus(); }, 100);
 }
 function closeModal() { $('#modal-overlay').classList.remove('open'); }
 $('#modal-overlay').addEventListener('click', e => { if(e.target.id==='modal-overlay') closeModal(); });
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && $('#modal-overlay').classList.contains('open')) closeModal();
+  if (e.key === 'Tab' && $('#modal-overlay').classList.contains('open')) {
+    var modal = $('#modal-content');
+    var focusable = modal.querySelectorAll('button, input, select, textarea, a[href]');
+    if (!focusable.length) return;
+    var first = focusable[0], last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+});
 
 async function saveMedia(url) {
   try {
@@ -641,6 +713,9 @@ function switchTab(id) { activeTab=id; renderNav(); render(); requestNotificatio
     `);
   }, 300);
 })();
+
+var renderPending = false;
+function scheduleRender() { if (renderPending) return; renderPending = true; requestAnimationFrame(function() { renderPending = false; render(); }); }
 
 function render() {
   const m=$('#main');
@@ -1160,7 +1235,7 @@ function recipeIngRow(r,inv) {
     </select></div>
     <div class="form-group" style="margin:0"><label class="label">Qtd/tâmara</label><input class="input f-ri-qty" type="number" step="0.01" value="${r.qty||''}"></div>
     <div class="form-group" style="margin:0"><label class="label">Unidade</label><input class="input f-ri-unit" value="${esc(r.unit||'')}" placeholder="g, ml, un..." style="font-size:11px"></div>
-    <button class="del-btn" onclick="this.closest('.recipe-row').remove()" style="margin-bottom:4px">✕</button>
+    <button class="del-btn" aria-label="Eliminar" onclick="this.closest('.recipe-row').remove()" style="margin-bottom:4px">✕</button>
   </div>`;
 }
 
@@ -1241,7 +1316,7 @@ function packPkgRow(r, inv) {
       ${inv.map(i=>`<option value="${i.id}" ${r.inventoryId===i.id?'selected':''}>${esc(i.name)} (${i.costPerUnit?fmt(i.costPerUnit)+'/'+esc(i.unit||'un'):'sem preço'})</option>`).join('')}
     </select></div>
     <div class="form-group" style="margin:0"><label class="label">Qtd/pack</label><input class="input f-pkg-qty" type="number" step="1" value="${r.qty||1}" onchange="calcPackPkgTotal()"></div>
-    <button class="del-btn" onclick="this.closest('.pkg-row').remove();calcPackPkgTotal()" style="margin-bottom:4px">✕</button>
+    <button class="del-btn" aria-label="Eliminar" onclick="this.closest('.pkg-row').remove();calcPackPkgTotal()" style="margin-bottom:4px">✕</button>
   </div>`;
 }
 function addPackPkgRow() {
@@ -1391,7 +1466,7 @@ function orderItemRow(idx,item) {
         ${packs.map(p=>`<option value="${p.id}" ${item.packId===p.id?'selected':''}>${'Pack '+p.size+' — '+fmt(p.salePrice)}</option>`).join('')}
       </select></div>
       <div class="form-group" style="margin:0;width:70px"><label class="label">Qtd</label><input class="input f-oi-qty" type="number" min="1" value="${item.qty||1}"></div>
-      <button class="del-btn" onclick="this.closest('.ord-item-row').remove()" style="margin-bottom:4px">✕</button>
+      <button class="del-btn" aria-label="Eliminar" onclick="this.closest('.ord-item-row').remove()" style="margin-bottom:4px">✕</button>
     </div>
     <div class="f-oi-dates" style="padding-left:4px">
       ${legacyDates.map(d=>orderDateRow(d)).join('')}
@@ -1412,7 +1487,7 @@ function orderDateRow(d) {
       ${flavors.map(f=>`<option value="${f.id}" ${d.flavorId===f.id?'selected':''}>${esc(f.name)}</option>`).join('')}
     </select></div>
     <div class="form-group" style="margin:0;width:60px"><label class="label" style="font-size:9px">Qtd</label><input class="input f-od-qty" type="number" min="1" value="${d.qty||1}" oninput="updatePackDateCount(this.closest('.ord-item-row'))"></div>
-    <button class="del-btn" onclick="var ir=this.closest('.ord-item-row');this.closest('.ord-date-row').remove();updatePackDateCount(ir)" style="margin-bottom:4px;font-size:10px">✕</button>
+    <button class="del-btn" aria-label="Eliminar" onclick="var ir=this.closest('.ord-item-row');this.closest('.ord-date-row').remove();updatePackDateCount(ir)" style="margin-bottom:4px;font-size:10px">✕</button>
   </div>`;
 }
 
@@ -1986,7 +2061,7 @@ function renderFeedback(el) {
             <div style="color:var(--gold);font-size:14px;margin-bottom:4px">${'★'.repeat(f.rating||0)}${'☆'.repeat(5-(f.rating||0))}</div>
             <div style="font-size:13px;font-weight:500;color:var(--text)">${esc(cust?cust.name:'Anónimo')}${ord?' · #'+ord.orderNum:''}</div>
           </div>
-          <button class="del-btn" onclick="delFeedback('${f.id}')">✕</button>
+          <button class="del-btn" aria-label="Eliminar" onclick="delFeedback('${f.id}')">✕</button>
         </div>
         ${f.favProduct?`<div style="font-size:11px;color:var(--muted);margin-top:6px">❤️ Favorito: ${esc(f.favProduct)}</div>`:''}
         ${f.comment?`<div style="font-size:12px;color:var(--text);margin-top:8px;line-height:1.5">${esc(f.comment)}</div>`:''}
@@ -2096,7 +2171,7 @@ function renderFinances(el) {
         </div>
         <div style="display:flex;align-items:center;gap:14px">
           <span style="font-size:15px;font-weight:600;color:var(--red)">-${fmt(i.amount)}</span>
-          <button class="del-btn" onclick="delFinance('${i.id}')">✕</button>
+          <button class="del-btn" aria-label="Eliminar" onclick="delFinance('${i.id}')">✕</button>
         </div>
       </div>
     `).join('')}</div>
@@ -2202,23 +2277,6 @@ function openLogoGuide() {
 }
 
 // ===== 5. CHAT =====
-let chatUser = localStorage.getItem('musamar-identity') || '';
-
-function pickIdentity(name) {
-  localStorage.setItem('musamar-identity', name);
-  chatUser = name;
-  document.getElementById('identity-screen').style.display = 'none';
-  requestNotifications();
-  saveFCMToken();
-}
-
-// Show identity screen if not set
-if(!chatUser) {
-  document.getElementById('identity-screen').style.display = 'flex';
-} else {
-  document.getElementById('identity-screen').style.display = 'none';
-}
-
 function renderChat(el) {
   const msgs=state.chat;
   const grouped={};
@@ -3085,7 +3143,7 @@ function renderObjectives(el) {
               <button class="goal-check ${g.done?'done':''}" onclick="${isCurrent?`toggleGoal('${mk}','${g.id}')`:`toggleFutureGoal('${weekInfo.monISO}','${mk}','${g.id}')`}">${g.done?'✓':''}</button>
               <span class="goal-text ${g.done?'done':''}" onclick="${isCurrent?`editGoalModal('${mk}','${g.id}')`:`editFutureGoalModal('${weekInfo.monISO}','${mk}','${g.id}')`}" style="cursor:pointer">${esc(g.text)}</span>
               <span style="font-size:9px;color:var(--dim);white-space:nowrap">${g.assignee?esc(g.assignee):''}</span>
-              <button class="del-btn" onclick="if(confirm('Eliminar este objetivo?')){${isCurrent?`delGoal('${mk}','${g.id}')`:` delFutureGoal('${weekInfo.monISO}','${mk}','${g.id}')`}}">✕</button>
+              <button class="del-btn" aria-label="Eliminar" onclick="if(confirm('Eliminar este objetivo?')){${isCurrent?`delGoal('${mk}','${g.id}')`:` delFutureGoal('${weekInfo.monISO}','${mk}','${g.id}')`}}">✕</button>
             </div>
           `).join('')}</div>
           <button class="btn btn-ghost btn-full" onclick="${isCurrent?`openGoalModal('${mk}')`:`openFutureGoalModal('${mk}',${viewWeekOffset})`}">+ Adicionar Objetivo</button>
@@ -3363,7 +3421,7 @@ function renderNoteCard(n) {
         <div style="font-size:12px;color:var(--muted);white-space:pre-wrap">${esc(n.body||'')}</div>
         ${dateStr?`<div style="font-size:10px;color:var(--dim);margin-top:6px">${dateStr} · ${esc(n.author||'')}</div>`:''}
       </div>
-      <button class="del-btn" onclick="event.stopPropagation();if(confirm('Eliminar esta nota?'))delNote('${n.id}')">✕</button>
+      <button class="del-btn" aria-label="Eliminar" onclick="event.stopPropagation();if(confirm('Eliminar esta nota?'))delNote('${n.id}')">✕</button>
     </div>
   </div>`;
 }
@@ -3408,7 +3466,7 @@ function renderInspirationSection() {
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
           <span class="tag tag-gold">${esc(i.category)}</span>
-          <button class="close-btn" onclick="delInspiration('${i.id}')">✕</button>
+          <button class="close-btn" aria-label="Eliminar" onclick="delInspiration('${i.id}')">✕</button>
         </div>
         <h3 style="font-size:15px;font-weight:600;margin:8px 0 6px">${esc(i.title)}</h3>
         ${i.notes?`<p style="font-size:12px;color:var(--muted);margin:0 0 8px;line-height:1.5">${esc(i.notes)}</p>`:''}
@@ -3435,7 +3493,7 @@ function renderBrandSection() {
       </div>
       ${open?`<div class="grid grid-cards" style="padding:12px;gap:10px">${assets.map(i=>`
         <div class="card" style="margin:0">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><span class="tag tag-gold">${esc(i.type)}</span><button class="close-btn" onclick="event.stopPropagation();delBrand('${i.id}')">✕</button></div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px"><span class="tag tag-gold">${esc(i.type)}</span><button class="close-btn" aria-label="Eliminar" onclick="event.stopPropagation();delBrand('${i.id}')">✕</button></div>
           ${i.url?`<div style="width:100%;height:120px;border-radius:6px;overflow:hidden;margin-bottom:10px;background:var(--bg2);display:flex;align-items:center;justify-content:center"><img src="${esc(i.url)}" style="max-width:100%;max-height:100%;object-fit:contain" onerror="this.style.display='none'"></div>`:''}
           <h3 style="font-size:14px;font-weight:600;margin:0 0 4px">${esc(i.name)}</h3>
           ${i.notes?`<p style="font-size:11px;color:var(--dim);margin:0">${esc(i.notes)}</p>`:''}
@@ -3535,6 +3593,16 @@ function pickChip(btn) {
 }
 
 function esc(s) { if(!s) return ''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+var toastTimer;
+function toast(msg) {
+  var el = document.getElementById('toast');
+  if (!el) { el = document.createElement('div'); el.id = 'toast'; el.className = 'toast'; document.body.appendChild(el); }
+  el.textContent = msg;
+  clearTimeout(toastTimer);
+  requestAnimationFrame(function() { el.classList.add('show'); });
+  toastTimer = setTimeout(function() { el.classList.remove('show'); }, 2500);
+}
 
 // ===== CLEANUP: remove old caches (keep FCM service worker) =====
 if('serviceWorker' in navigator) {
