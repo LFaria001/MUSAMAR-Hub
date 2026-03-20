@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774016929';
+var APP_V='t1774017011';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -434,28 +434,44 @@ const EMAIL_MAP = {
 const ALLOWED_EMAILS = Object.keys(EMAIL_MAP);
 let chatUser = '';
 
-// Google Sign-In handler
+// Google Sign-In handler — uses redirect in standalone/PWA mode, popup otherwise
+var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
 function handleGoogleLogin() {
-  const btn = document.getElementById('login-btn');
-  const err = document.getElementById('login-error');
+  var btn = document.getElementById('login-btn');
+  var err = document.getElementById('login-error');
   btn.disabled = true; btn.textContent = 'A entrar...';
   err.style.display = 'none';
-  const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider).then(function(result) {
-    if (!ALLOWED_EMAILS.includes(result.user.email)) {
-      result.user.delete();
-      err.textContent = 'Esta conta não tem acesso.';
-      err.style.display = 'block';
+  var provider = new firebase.auth.GoogleAuthProvider();
+  if (isStandalone) {
+    auth.signInWithRedirect(provider);
+  } else {
+    auth.signInWithPopup(provider).then(function(result) {
+      if (!ALLOWED_EMAILS.includes(result.user.email)) {
+        result.user.delete();
+        err.textContent = 'Esta conta não tem acesso.';
+        err.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Entrar com Google';
+      }
+    }).catch(function(error) {
+      if (error.code !== 'auth/popup-closed-by-user') {
+        err.textContent = 'Erro ao entrar. Tenta novamente.';
+        err.style.display = 'block';
+      }
       btn.disabled = false; btn.textContent = 'Entrar com Google';
-    }
-  }).catch(function(error) {
-    if (error.code !== 'auth/popup-closed-by-user') {
-      err.textContent = 'Erro ao entrar. Tenta novamente.';
-      err.style.display = 'block';
-    }
-    btn.disabled = false; btn.textContent = 'Entrar com Google';
-  });
+    });
+  }
 }
+
+// Handle redirect result (for PWA mode)
+auth.getRedirectResult().then(function(result) {
+  if (result.user && !ALLOWED_EMAILS.includes(result.user.email)) {
+    result.user.delete();
+    auth.signOut();
+    var err = document.getElementById('login-error');
+    if (err) { err.textContent = 'Esta conta não tem acesso.'; err.style.display = 'block'; }
+  }
+}).catch(function() {});
 
 function handleLogout() {
   if (confirm('Tens a certeza que queres sair?')) auth.signOut();
