@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774086157';
+var APP_V='t1774086420';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -1781,7 +1781,7 @@ function renderInventory(el) {
   el.innerHTML=`
     <div class="section-header">
       <div><h1>Inventário</h1><div class="sub">${items.length} itens${low.length?' · <span style="color:var(--red)">'+low.length+' stock baixo</span>':''}</div></div>
-      <div style="display:flex;gap:8px"><button class="btn btn-ghost" onclick="startReceiptScan()">📷 Scan Recibo</button><button class="btn btn-ghost" onclick="openRestockModal()">+ Reforçar</button><button class="btn btn-primary" onclick="openInvModal()">+ Novo Item</button></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost" onclick="startReceiptScan()">📷 Scan Recibo</button><button class="btn btn-ghost" onclick="openRestockModal()">+ Reforçar</button><button class="btn btn-ghost" style="color:var(--red);border-color:var(--red)" onclick="openWasteModal()">🗑 Desperdício</button><button class="btn btn-primary" onclick="openInvModal()">+ Novo Item</button></div>
     </div>
     ${items.length?`<div class="card" style="padding:0;overflow-x:auto"><table class="data-table">
       <thead><tr><th>Material</th><th>Categoria</th><th>Stock</th><th>Mín.</th><th>Estado</th><th>Desperdício</th><th>Custo/un</th><th>Total gasto</th></tr></thead>
@@ -1921,6 +1921,56 @@ function saveRestock() {
   }
   save(); closeModal(); render();
   toast(`+${qty} ${item.unit||'un'} de ${item.name} adicionado ao stock.`);
+}
+
+function openWasteModal() {
+  const items=(state.inventory||[]).filter(i=>invCurrentStock(i)>0);
+  if(!items.length) { toast('Não há itens com stock para registar desperdício.'); return; }
+  openModal('Registar Desperdício', `
+    <div class="form-group"><label class="label">Item</label><select class="input" id="f-waste-item" onchange="onWasteItemChange()">
+      <option value="">— Seleciona —</option>
+      ${items.map(i=>`<option value="${i.id}">${esc(i.name)} (${invCurrentStock(i)} ${esc(i.unit||'un')})</option>`).join('')}
+    </select></div>
+    <div id="f-waste-details" style="display:none">
+      <div style="display:flex;gap:8px">
+        <div class="form-group" style="flex:1"><label class="label">Quantidade</label><input class="input" type="number" step="0.01" id="f-waste-qty" placeholder="Ex: 1"></div>
+        <div class="form-group" style="flex:1"><label class="label">Unidade</label><select class="input" id="f-waste-unit">
+          <option value="same" id="f-waste-unit-same">mesma</option>
+          <option value="un">unidades</option>
+        </select></div>
+      </div>
+      <div class="form-group"><label class="label">Motivo (opcional)</label><input class="input" type="text" id="f-waste-reason" placeholder="Ex: podre, danificado..."></div>
+    </div>
+    <button class="btn btn-primary btn-full" style="background:var(--red);margin-top:8px" onclick="saveWaste()">Registar Desperdício</button>
+  `);
+}
+function onWasteItemChange() {
+  const id=$('#f-waste-item').value;
+  const det=document.getElementById('f-waste-details');
+  if(!id) { det.style.display='none'; return; }
+  det.style.display='block';
+  const item=(state.inventory||[]).find(i=>i.id===id);
+  document.getElementById('f-waste-unit-same').textContent=item.unit||'un';
+}
+function saveWaste() {
+  const id=$('#f-waste-item').value; if(!id) return;
+  const item=(state.inventory||[]).find(i=>i.id===id); if(!item) return;
+  const qty=Math.round((parseFloat($('#f-waste-qty').value)||0)*100)/100;
+  if(qty<=0) { toast('Introduz uma quantidade válida.'); return; }
+  const unitSel=$('#f-waste-unit').value;
+  let wasteInBaseUnit=qty;
+  if(unitSel==='un' && (item.unit||'un')!=='un') {
+    // Converting units to base unit - e.g., 1 date to kg
+    // Average date weighs ~0.02kg (20g)
+    const avgWeights={'kg':0.02,'g':20,'l':0.02};
+    wasteInBaseUnit=Math.round(qty*(avgWeights[item.unit]||0.02)*100)/100;
+  }
+  const stock=invCurrentStock(item);
+  if(wasteInBaseUnit>stock) { toast('Quantidade de desperdício excede o stock disponível.'); return; }
+  item.qtyWasted=Math.round(((parseFloat(item.qtyWasted)||0)+wasteInBaseUnit)*100)/100;
+  const reason=$('#f-waste-reason')?.value?.trim()||'';
+  save(); closeModal(); render();
+  toast(`${qty} ${unitSel==='same'?(item.unit||'un'):'un'} de ${item.name} registado como desperdício.${reason?' ('+reason+')':''}`);
 }
 
 function propagateInvPriceToFlavors(invId) {
