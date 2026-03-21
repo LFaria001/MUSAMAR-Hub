@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774086420';
+var APP_V='t1774086483';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -1961,9 +1961,9 @@ function saveWaste() {
   let wasteInBaseUnit=qty;
   if(unitSel==='un' && (item.unit||'un')!=='un') {
     // Converting units to base unit - e.g., 1 date to kg
-    // Average date weighs ~0.02kg (20g)
-    const avgWeights={'kg':0.02,'g':20,'l':0.02};
-    wasteInBaseUnit=Math.round(qty*(avgWeights[item.unit]||0.02)*100)/100;
+    // Average date weighs ~0.03kg (30g)
+    const avgWeights={'kg':0.03,'g':30,'l':0.03};
+    wasteInBaseUnit=Math.round(qty*(avgWeights[item.unit]||0.03)*100)/100;
   }
   const stock=invCurrentStock(item);
   if(wasteInBaseUnit>stock) { toast('Quantidade de desperdício excede o stock disponível.'); return; }
