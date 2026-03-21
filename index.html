@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774085964';
+var APP_V='t1774086157';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -305,7 +305,7 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 <body>
 
 <!-- LOGIN SCREEN -->
-<div id="login-screen" style="position:fixed;inset:0;background:var(--bg);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center">
+<div id="login-screen" style="position:fixed;inset:0;background:var(--bg);z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center">
   <h1 style="font-family:var(--font-display);font-size:36px;color:var(--gold);letter-spacing:6px;margin-bottom:8px">MUSAMAR</h1>
   <p style="font-size:11px;color:var(--muted);letter-spacing:3px;text-transform:uppercase;margin-bottom:48px">Business Hub</p>
   <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:280px">
@@ -434,28 +434,50 @@ const EMAIL_MAP = {
 const ALLOWED_EMAILS = Object.keys(EMAIL_MAP);
 let chatUser = '';
 
-// Google Sign-In handler — always uses popup
+// Google Sign-In handler — popup on desktop, redirect on mobile PWA
+var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches || window.navigator.standalone;
+
 function handleGoogleLogin() {
   var btn = document.getElementById('login-btn');
   var err = document.getElementById('login-error');
   btn.disabled = true; btn.textContent = 'A entrar...';
   err.style.display = 'none';
   var provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider).then(function(result) {
-    if (!ALLOWED_EMAILS.includes(result.user.email)) {
-      result.user.delete();
-      err.textContent = 'Esta conta não tem acesso.';
-      err.style.display = 'block';
+  provider.addScope('email');
+  if (isStandalone) {
+    auth.signInWithRedirect(provider);
+  } else {
+    auth.signInWithPopup(provider).then(function(result) {
+      if (!ALLOWED_EMAILS.includes(result.user.email)) {
+        result.user.delete();
+        err.textContent = 'Esta conta não tem acesso.';
+        err.style.display = 'block';
+        btn.disabled = false; btn.textContent = 'Entrar com Google';
+      }
+    }).catch(function(error) {
+      if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
+        err.textContent = 'Erro ao entrar. Tenta novamente.';
+        err.style.display = 'block';
+      }
       btn.disabled = false; btn.textContent = 'Entrar com Google';
-    }
-  }).catch(function(error) {
-    if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
-      err.textContent = 'Erro ao entrar. Tenta novamente.';
-      err.style.display = 'block';
-    }
-    btn.disabled = false; btn.textContent = 'Entrar com Google';
-  });
+    });
+  }
 }
+
+// Handle redirect result (for mobile PWA)
+auth.getRedirectResult().then(function(result) {
+  if (result && result.user && !ALLOWED_EMAILS.includes(result.user.email)) {
+    result.user.delete().then(function() { auth.signOut(); });
+    var err = document.getElementById('login-error');
+    if (err) { err.textContent = 'Esta conta não tem acesso.'; err.style.display = 'block'; }
+  }
+}).catch(function(error) {
+  var err = document.getElementById('login-error');
+  if (err && error.code !== 'auth/popup-closed-by-user') {
+    err.textContent = 'Erro ao entrar. Tenta novamente.';
+    err.style.display = 'block';
+  }
+});
 
 function handleLogout() {
   if (confirm('Tens a certeza que queres sair?')) auth.signOut();

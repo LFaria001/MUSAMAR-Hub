@@ -4,7 +4,7 @@
   "description": "Business Hub — Tâmaras Recheadas",
   "start_url": ".",
   "scope": ".",
-  "display": "fullscreen",
+  "display": "standalone",
   "background_color": "#faebd6",
   "theme_color": "#4d2c14",
   "orientation": "any",
