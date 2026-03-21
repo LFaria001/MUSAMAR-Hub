@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774086483';
+var APP_V='t1774108914';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -399,7 +399,7 @@ const CATS = ['Produto','Packaging','Marketing','Receita','Outro'];
 const CHANNELS = ['Instagram','TikTok','WhatsApp','Website','Referência','Outro'];
 const ORDER_STATUSES = ['pendente','pago','em produção','enviado','entregue','cancelado'];
 const PAY_STATUSES = ['pendente','pago','parcial','reembolsado'];
-const INV_CATS = ['Tâmaras','Recheios','Embalagem','Rótulos','Outro'];
+const INV_CATS = ['Tâmaras','Recheios','Toppings','Embalagem','Rótulos','Outro'];
 const INV_UNITS = ['un','kg','g','L','ml'];
 
 const PACK_SIZES = [3, 6, 10];
