@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774176508';
+var APP_V='t1774177083';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -925,6 +925,17 @@ function renderProductionList() {
           const key=name+'|'+unit;
           if(!ingTotals[key]) ingTotals[key]={name,unit,qty:0};
           ingTotals[key].qty+=r.qty*qty;
+          // Expand sub-recipe ingredients
+          if(inv&&inv.subRecipe&&inv.subRecipe.length) {
+            inv.subRecipe.forEach(sr=>{
+              const subInv=(state.inventory||[]).find(x=>x.id===sr.inventoryId);
+              const subName=subInv?subInv.name:sr.inventoryId;
+              const subUnit=sr.unit||(subInv?subInv.unit:'');
+              const subKey=subName+'|'+subUnit;
+              if(!ingTotals[subKey]) ingTotals[subKey]={name:subName,unit:subUnit,qty:0};
+              ingTotals[subKey].qty+=r.qty*qty*(sr.qtyPer100/100);
+            });
+          }
         });
       });
     });
@@ -1289,6 +1300,35 @@ function saveFlavor(editId) {
 function delFlavor(id) { state.flavors=(state.flavors||[]).filter(x=>x.id!==id); save(); closeModal(); render(); }
 
 // Auto-deduct inventory when order is delivered
+// Deduct qty from inventory item + expand sub-recipe ingredients
+function deductWithSubRecipe(invId, qty, recipeUnit) {
+  const inv=(state.inventory||[]).find(i=>i.id===invId);
+  if(!inv) return;
+  // Convert recipe unit to inventory unit for deduction
+  const invUnit=inv.unit||'un';
+  let deductQty=qty;
+  if(recipeUnit==='g'&&invUnit==='kg') deductQty=qty/1000;
+  else if(recipeUnit==='kg'&&invUnit==='g') deductQty=qty*1000;
+  else if(recipeUnit==='ml'&&invUnit==='l') deductQty=qty/1000;
+  else if(recipeUnit==='l'&&invUnit==='ml') deductQty=qty*1000;
+  inv.qtyUsed=Math.round(((parseFloat(inv.qtyUsed)||0)+deductQty)*100)/100;
+  // Expand sub-recipe: for each sub-ingredient, deduct proportionally
+  if(inv.subRecipe&&inv.subRecipe.length) {
+    inv.subRecipe.forEach(sr=>{
+      // sr.qtyPer100 = qty of sub-ingredient per 100 units of this item (in sr.unit)
+      const subQty=qty*(sr.qtyPer100/100);
+      const subInv=(state.inventory||[]).find(i=>i.id===sr.inventoryId);
+      if(!subInv) return;
+      const subInvUnit=subInv.unit||'un';
+      let subDeduct=subQty;
+      if(sr.unit==='g'&&subInvUnit==='kg') subDeduct=subQty/1000;
+      else if(sr.unit==='kg'&&subInvUnit==='g') subDeduct=subQty*1000;
+      else if(sr.unit==='ml'&&subInvUnit==='l') subDeduct=subQty/1000;
+      else if(sr.unit==='l'&&subInvUnit==='ml') subDeduct=subQty*1000;
+      subInv.qtyUsed=Math.round(((parseFloat(subInv.qtyUsed)||0)+subDeduct)*100)/100;
+    });
+  }
+}
 function deductInventoryForOrder(order) {
   if(order._stockDeducted) return;
   (order.items||[]).forEach(item=>{
@@ -1301,26 +1341,20 @@ function deductInventoryForOrder(order) {
         if(inv) { inv.qtyUsed=Math.round(((parseFloat(inv.qtyUsed)||0)+(pi.qty*packQty))*100)/100; }
       });
     }
-    // Deduct ingredient items
+    // Deduct ingredient items (with sub-recipe expansion)
     const dates=item.dates||[];
     if(dates.length) {
       dates.forEach(d=>{
         const flavor=(state.flavors||[]).find(f=>f.id===d.flavorId);
         if(!flavor||!flavor.recipe) return;
         const totalUnits=d.qty*packQty;
-        flavor.recipe.forEach(r=>{
-          const inv=(state.inventory||[]).find(i=>i.id===r.inventoryId);
-          if(inv) { inv.qtyUsed=Math.round(((parseFloat(inv.qtyUsed)||0)+(r.qty*totalUnits))*100)/100; }
-        });
+        flavor.recipe.forEach(r=>deductWithSubRecipe(r.inventoryId,r.qty*totalUnits,r.unit));
       });
     } else if(item.flavorId) {
       const flavor=(state.flavors||[]).find(f=>f.id===item.flavorId);
       if(!flavor||!flavor.recipe) return;
       const totalUnits=packQty*(parseFloat(item.packSize)||0);
-      flavor.recipe.forEach(r=>{
-        const inv=(state.inventory||[]).find(i=>i.id===r.inventoryId);
-        if(inv) { inv.qtyUsed=Math.round(((parseFloat(inv.qtyUsed)||0)+(r.qty*totalUnits))*100)/100; }
-      });
+      flavor.recipe.forEach(r=>deductWithSubRecipe(r.inventoryId,r.qty*totalUnits,r.unit));
     }
   });
   order._stockDeducted=true;
@@ -1832,7 +1866,11 @@ function openInvModal(editId) {
       <div class="form-group"><label class="label">Usado</label><input class="input" type="number" step="0.01" id="f-inv-used" value="${i.qtyUsed||0}"></div>
       <div class="form-group"><label class="label">Desperdiçado</label><input class="input" type="number" step="0.01" id="f-inv-wasted" value="${i.qtyWasted||0}"></div>
     </div>
-    <div class="form-group"><label class="label">Validade</label><input class="input" type="date" id="f-inv-exp" value="${i.expirationDate||''}"></div>`
+    <div class="form-group"><label class="label">Validade</label><input class="input" type="date" id="f-inv-exp" value="${i.expirationDate||''}"></div>
+    <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;font-weight:600">Sub-receita (opcional)</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:8px">Ingredientes adicionados por cada 100${esc(i.unit||'un')} deste item</div>
+    <div id="f-inv-subrecipe">${(i.subRecipe||[]).map(sr=>subRecipeRow(sr,inv.filter(x=>x.id!==i.id))).join('')}</div>
+    <button class="btn btn-ghost btn-full" onclick="addSubRecipeRow('${i.id}')" style="margin-bottom:16px">+ Adicionar Ingrediente</button>`
     :`<div class="form-group"><label class="label">Quantidade recebida</label><input class="input" type="number" step="0.01" id="f-inv-received" value="" placeholder="Quantas unidades/kg recebes agora?" oninput="updateCostPreview()"></div>
     <div class="form-group"><label class="label">Validade</label><input class="input" type="date" id="f-inv-exp" value=""></div>`}
     <div id="cost-preview" style="font-size:11px;color:var(--dim);text-align:center;margin-bottom:8px"></div>
@@ -1851,6 +1889,26 @@ function openInvModal(editId) {
   }
 }
 
+function subRecipeRow(sr,inv) {
+  sr=sr||{};
+  inv=inv||(state.inventory||[]);
+  const units=['g','kg','ml','l','un'];
+  return `<div class="subrecipe-row" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+    <div class="form-group" style="margin:0"><label class="label">Ingrediente</label><select class="input f-sr-inv">
+      <option value="">—</option>
+      ${inv.map(i=>`<option value="${i.id}" ${sr.inventoryId===i.id?'selected':''}>${esc(i.name)}</option>`).join('')}
+    </select></div>
+    <div class="form-group" style="margin:0"><label class="label">Qtd/100</label><input class="input f-sr-qty" type="number" step="0.01" value="${sr.qtyPer100||''}"></div>
+    <div class="form-group" style="margin:0"><label class="label">Unidade</label><select class="input f-sr-unit">${units.map(u=>`<option ${sr.unit===u?'selected':''}>${u}</option>`).join('')}</select></div>
+    <button class="del-btn" aria-label="Eliminar" onclick="this.closest('.subrecipe-row').remove()" style="margin-bottom:4px">✕</button>
+  </div>`;
+}
+function addSubRecipeRow(excludeId) {
+  const inv=(state.inventory||[]).filter(i=>i.id!==excludeId);
+  const div=document.createElement('div');
+  div.innerHTML=subRecipeRow({},inv);
+  document.getElementById('f-inv-subrecipe').appendChild(div.firstElementChild);
+}
 function updateCostPreview() {
   const el=document.getElementById('cost-preview'); if(!el) return;
   const total=parseFloat($('#f-inv-cost')?.value)||0;
@@ -1878,6 +1936,17 @@ function saveInv(editId) {
     qtyWasted:editId?Math.round((parseFloat($('#f-inv-wasted').value)||0)*100)/100:0,
     expirationDate:$('#f-inv-exp').value||''
   };
+  // Collect sub-recipe if editing
+  if(editId) {
+    const subRecipe=[];
+    document.querySelectorAll('#f-inv-subrecipe .subrecipe-row').forEach(r=>{
+      const invId=r.querySelector('.f-sr-inv').value;
+      const qty=parseFloat(r.querySelector('.f-sr-qty').value)||0;
+      const unit=r.querySelector('.f-sr-unit').value;
+      if(invId&&qty>0) subRecipe.push({inventoryId:invId,qtyPer100:qty,unit});
+    });
+    data.subRecipe=subRecipe;
+  }
   if(!state.inventory) state.inventory=[];
   if(editId) {
     const i=state.inventory.find(x=>x.id===editId);
