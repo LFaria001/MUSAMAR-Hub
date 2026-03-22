@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774175678';
+var APP_V='t1774176508';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -1246,13 +1246,14 @@ function updateSimulator() {
 function recipeIngRow(r,inv) {
   r=r||{};
   inv=inv||(state.inventory||[]);
+  const units=['g','kg','ml','l','un'];
   return `<div class="recipe-row" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
     <div class="form-group" style="margin:0"><label class="label">Ingrediente</label><select class="input f-ri-inv">
       <option value="">—</option>
-      ${inv.map(i=>`<option value="${i.id}" ${r.inventoryId===i.id?'selected':''}>${esc(i.name)} (${esc(i.unit||'un')})</option>`).join('')}
+      ${inv.map(i=>`<option value="${i.id}" ${r.inventoryId===i.id?'selected':''}>${esc(i.name)}</option>`).join('')}
     </select></div>
     <div class="form-group" style="margin:0"><label class="label">Qtd/tâmara</label><input class="input f-ri-qty" type="number" step="0.01" value="${r.qty||''}"></div>
-    <div class="form-group" style="margin:0"><label class="label">Unidade</label><input class="input f-ri-unit" value="${esc(r.unit||'')}" placeholder="g, ml, un..." style="font-size:11px"></div>
+    <div class="form-group" style="margin:0"><label class="label">Unidade</label><select class="input f-ri-unit">${units.map(u=>`<option ${r.unit===u?'selected':''}>${u}</option>`).join('')}</select></div>
     <button class="del-btn" aria-label="Eliminar" onclick="this.closest('.recipe-row').remove()" style="margin-bottom:4px">✕</button>
   </div>`;
 }
