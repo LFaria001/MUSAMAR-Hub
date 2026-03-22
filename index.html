@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774174167';
+var APP_V='t1774174561';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -1798,7 +1798,7 @@ function renderInventory(el) {
           <td style="color:var(--dim)">${i.minStock||'—'}</td>
           <td>${isLow?'<span class="badge badge-low">Baixo</span>':'<span class="badge badge-ok">OK</span>'}</td>
           <td style="color:${wastePct>10?'var(--red)':wastePct>0?'var(--gold)':'var(--dim)'}">${wasted>0?wastePct.toFixed(1)+'%':'0%'}</td>
-          <td style="color:var(--muted)">${i.costPerUnit?fmt(i.costPerUnit):'—'}</td>
+          <td style="color:var(--muted)">${i.costPerUnit?(()=>{const u=i.unit||'un';if(u==='g')return fmt(i.costPerUnit*1000)+'/kg';if(u==='ml')return fmt(i.costPerUnit*1000)+'/l';return fmt(i.costPerUnit)+'/'+u;})():'—'}</td>
           <td style="font-weight:500">${totalSpent>0?fmt(totalSpent):'—'}</td>
         </tr>`;
       }).join('')}</tbody>
