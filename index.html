@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774178958';
+var APP_V='t1774179104';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -1813,7 +1813,7 @@ function renderInventory(el) {
           <td style="color:var(--dim)">${i.minStock||'—'}</td>
           <td>${isLow?'<span class="badge badge-low">Baixo</span>':'<span class="badge badge-ok">OK</span>'}</td>
           <td style="color:${wastePct>10?'var(--red)':wastePct>0?'var(--gold)':'var(--dim)'}">${wasted>0?wastePct.toFixed(1)+'%':'0%'}</td>
-          <td style="color:var(--muted)">${(()=>{const p=i.costPerUnit||0;const ref=i.refPrice||0;const price=p||ref;if(!price)return '—';const u=i.unit||'un';const isRef=!p&&ref;const val=u==='g'?fmt(price*1000)+'/kg':u==='ml'?fmt(price*1000)+'/l':fmt(price)+'/'+u;return isRef?'<span style="color:var(--gold)" title="Preço de referência">~'+val+'</span>':val;})()}</td>
+          <td style="color:var(--muted)">${(()=>{const p=i.costPerUnit||0;const ref=i.refPrice||0;const price=p||ref;if(!price)return '—';const u=i.unit||'un';const isRef=!p&&ref;const val=u==='g'?fmt(price*1000)+'/kg':u==='ml'?fmt(price*1000)+'/l':fmt(price)+'/'+u;return isRef?'<span style="color:var(--gold)" title="Preço de referência">'+val+'</span>':val;})()}</td>
           <td style="font-weight:500">${totalSpent>0?fmt(totalSpent):'—'}</td>
         </tr>`;
       }).join('')}</tbody>
