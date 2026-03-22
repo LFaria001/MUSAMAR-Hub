@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774180292';
+var APP_V='t1774181711';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -767,9 +767,7 @@ function flavorUnitCost(f) {
     return f.recipe.reduce((sum,r)=>{
       const inv=(state.inventory||[]).find(i=>i.id===r.inventoryId);
       if(!inv) return sum;
-      const realPrice=inv.totalPaid&&inv.qtyReceived?inv.totalPaid/inv.qtyReceived:inv.costPerUnit||0;
-      const refCalc=inv.refPriceTotal&&inv.refQty?inv.refPriceTotal/inv.refQty:inv.refPrice||0;
-      const effectivePrice=realPrice||refCalc;
+      const effectivePrice=inv.totalPaid&&inv.qtyReceived?inv.totalPaid/inv.qtyReceived:inv.costPerUnit||0;
       if(!effectivePrice) return sum;
       const invUnit=(inv.unit||'un').toLowerCase();
       const rUnit=(r.unit||invUnit).toLowerCase();
@@ -784,9 +782,7 @@ function flavorUnitCost(f) {
         inv.subRecipe.forEach(sr=>{
           const subInv=(state.inventory||[]).find(i=>i.id===sr.inventoryId);
           if(!subInv) return;
-          const subReal=subInv.totalPaid&&subInv.qtyReceived?subInv.totalPaid/subInv.qtyReceived:subInv.costPerUnit||0;
-          const subRef=subInv.refPriceTotal&&subInv.refQty?subInv.refPriceTotal/subInv.refQty:subInv.refPrice||0;
-          const subEffective=subReal||subRef;
+          const subEffective=subInv.totalPaid&&subInv.qtyReceived?subInv.totalPaid/subInv.qtyReceived:subInv.costPerUnit||0;
           if(!subEffective) return;
           const subQty=r.qty*(sr.qtyPer100/100);
           const subInvUnit=(subInv.unit||'un').toLowerCase();
@@ -1824,7 +1820,7 @@ function renderInventory(el) {
           <td style="color:var(--dim)">${i.minStock||'—'}</td>
           <td>${isLow?'<span class="badge badge-low">Baixo</span>':'<span class="badge badge-ok">OK</span>'}</td>
           <td style="color:${wastePct>10?'var(--red)':wastePct>0?'var(--gold)':'var(--dim)'}">${wasted>0?wastePct.toFixed(1)+'%':'0%'}</td>
-          <td style="color:var(--muted)">${(()=>{const p=i.totalPaid&&i.qtyReceived?i.totalPaid/i.qtyReceived:i.costPerUnit||0;const ref=i.refPriceTotal&&i.refQty?i.refPriceTotal/i.refQty:i.refPrice||0;const price=p||ref;if(!price)return '—';const u=i.unit||'un';const isRef=!p&&ref;const val=u==='g'?fmt(price*1000)+'/kg':u==='ml'?fmt(price*1000)+'/l':fmt(price)+'/'+u;return isRef?'<span style="color:var(--gold)" title="Preço de referência">'+val+'</span>':val;})()}</td>
+          <td style="color:var(--muted)">${(()=>{const price=i.totalPaid&&i.qtyReceived?i.totalPaid/i.qtyReceived:i.costPerUnit||0;if(!price)return '—';const u=i.unit||'un';const val=u==='g'?fmt(price*1000)+'/kg':u==='ml'?fmt(price*1000)+'/l':fmt(price)+'/'+u;return val;})()}</td>
           <td style="font-weight:500">${totalSpent>0?fmt(totalSpent):'—'}</td>
         </tr>`;
       }).join('')}</tbody>
@@ -1854,11 +1850,6 @@ function openInvModal(editId) {
       </select></div>
       <div class="form-group"><label class="label">Preço total pago (€)</label><input class="input" type="number" step="0.01" id="f-inv-cost" value="${i?(i.totalPaid!=null?i.totalPaid:Math.round(((i.costPerUnit||0)*(i.qtyReceived||0))*100)/100)||'':''}" placeholder="Ex: 8.97" oninput="updateCostPreview()"></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label class="label">Preço referência total (€)</label><input class="input" type="number" step="0.01" id="f-inv-refprice" value="${i&&i.refPriceTotal?i.refPriceTotal:''}" placeholder="Ex: 5.99" oninput="updateRefPreview()"></div>
-      <div class="form-group"><label class="label">Qtd referência</label><input class="input" type="number" step="0.01" id="f-inv-refqty" value="${i&&i.refQty?i.refQty:''}" placeholder="Ex: 500" oninput="updateRefPreview()"></div>
-    </div>
-    <div id="ref-preview" style="font-size:11px;color:var(--gold);text-align:center;margin-bottom:8px"></div>
     <div id="f-inv-new-supplier" style="display:none">
       <div class="form-group"><label class="label">Nome do fornecedor</label><input class="input" id="f-inv-supplier-name" placeholder="Ex: Continente, Makro..."></div>
     </div>
@@ -1910,16 +1901,6 @@ function addSubRecipeRow(excludeId) {
   div.innerHTML=subRecipeRow({},inv);
   document.getElementById('f-inv-subrecipe').appendChild(div.firstElementChild);
 }
-function updateRefPreview() {
-  const el=document.getElementById('ref-preview'); if(!el) return;
-  const total=parseFloat($('#f-inv-refprice')?.value)||0;
-  const qty=parseFloat($('#f-inv-refqty')?.value)||0;
-  const unit=$('#f-inv-unit')?.value||'un';
-  if(total>0&&qty>0) {
-    const perUnit=total/qty;
-    el.textContent='Ref: '+fmt(total)+' ÷ '+qty+unit+' = '+fmt(perUnit)+'/'+unit;
-  } else { el.textContent=''; }
-}
 function updateCostPreview() {
   const el=document.getElementById('cost-preview'); if(!el) return;
   const total=parseFloat($('#f-inv-cost')?.value)||0;
@@ -1942,9 +1923,6 @@ function saveInv(editId) {
   const data={
     name, category:$('#f-inv-cat').value, unit:$('#f-inv-unit').value,
     supplier, costPerUnit, totalPaid:Math.round(totalPaid*100)/100,
-    refPriceTotal:Math.round((parseFloat($('#f-inv-refprice').value)||0)*100)/100,
-    refQty:Math.round((parseFloat($('#f-inv-refqty').value)||0)*100)/100,
-    refPrice:(()=>{const t=parseFloat($('#f-inv-refprice').value)||0;const q=parseFloat($('#f-inv-refqty').value)||0;return q>0?Math.round((t/q)*10000)/10000:0;})(),
     qtyReceived:Math.round((parseFloat($('#f-inv-received').value)||0)*100)/100,
     qtyUsed:editId?Math.round((parseFloat($('#f-inv-used').value)||0)*100)/100:0,
     qtyWasted:editId?Math.round((parseFloat($('#f-inv-wasted').value)||0)*100)/100:0,
