@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774174561';
+var APP_V='t1774175678';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -444,24 +444,20 @@ function handleGoogleLogin() {
   err.style.display = 'none';
   var provider = new firebase.auth.GoogleAuthProvider();
   provider.addScope('email');
-  if (isStandalone) {
-    auth.signInWithRedirect(provider);
-  } else {
-    auth.signInWithPopup(provider).then(function(result) {
-      if (!ALLOWED_EMAILS.includes(result.user.email)) {
-        result.user.delete();
-        err.textContent = 'Esta conta não tem acesso.';
-        err.style.display = 'block';
-        btn.disabled = false; btn.textContent = 'Entrar com Google';
-      }
-    }).catch(function(error) {
-      if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
-        err.textContent = 'Erro ao entrar. Tenta novamente.';
-        err.style.display = 'block';
-      }
+  auth.signInWithPopup(provider).then(function(result) {
+    if (!ALLOWED_EMAILS.includes(result.user.email)) {
+      result.user.delete();
+      err.textContent = 'Esta conta não tem acesso.';
+      err.style.display = 'block';
       btn.disabled = false; btn.textContent = 'Entrar com Google';
-    });
-  }
+    }
+  }).catch(function(error) {
+    if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
+      err.textContent = 'Erro ao entrar. Tenta novamente.';
+      err.style.display = 'block';
+    }
+    btn.disabled = false; btn.textContent = 'Entrar com Google';
+  });
 }
 
 // Handle redirect result (for mobile PWA)
