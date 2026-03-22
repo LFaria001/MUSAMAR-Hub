@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774179771';
+var APP_V='t1774180292';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -483,9 +483,15 @@ function handleLogout() {
 function loadLocal() { try { const d = localStorage.getItem('musamar-hub'); if(d) { const p = JSON.parse(d); Object.assign(state, p); } } catch(e){} }
 function saveLocal() { localStorage.setItem('musamar-hub', JSON.stringify(state)); }
 
+// Guard: only allow Firestore writes after initial data has loaded
+var firestoreReady = false;
+
 // Save to Firestore
 function save() {
   saveLocal();
+  if(!firestoreReady) return; // Never write to Firestore before data is loaded
+  // Backup previous state before writing
+  try { localStorage.setItem('musamar-hub-backup', localStorage.getItem('musamar-hub')||''); } catch(e){}
   stateRef.set({
     inspiration: state.inspiration,
     recipes: state.recipes,
@@ -531,7 +537,7 @@ auth.onAuthStateChanged(function(user) {
     let initialLoad = true;
     firestoreUnsub = stateRef.onSnapshot(snap => {
       if(snap.metadata.hasPendingWrites) return;
-      if(!snap.exists) { save(); return; }
+      if(!snap.exists) { firestoreReady = true; save(); return; }
       const data = snap.data();
       state.inspiration = data.inspiration || [];
       state.recipes = data.recipes || [];
@@ -553,6 +559,7 @@ auth.onAuthStateChanged(function(user) {
       state.feedback = data.feedback || [];
       state.orderSeq = data.orderSeq || 0;
       saveLocal();
+      firestoreReady = true;
       render();
       initialLoad = false;
     }, err => console.warn('Firestore listen error:', err));
