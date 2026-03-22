@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774179104';
+var APP_V='t1774179355';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -760,7 +760,9 @@ function flavorUnitCost(f) {
     return f.recipe.reduce((sum,r)=>{
       const inv=(state.inventory||[]).find(i=>i.id===r.inventoryId);
       if(!inv) return sum;
-      const effectivePrice=inv.costPerUnit||inv.refPrice||0;
+      const realPrice=inv.totalPaid&&inv.qtyReceived?inv.totalPaid/inv.qtyReceived:inv.costPerUnit||0;
+      const refCalc=inv.refPriceTotal&&inv.refQty?inv.refPriceTotal/inv.refQty:inv.refPrice||0;
+      const effectivePrice=realPrice||refCalc;
       if(!effectivePrice) return sum;
       const invUnit=(inv.unit||'un').toLowerCase();
       const rUnit=(r.unit||invUnit).toLowerCase();
@@ -775,7 +777,9 @@ function flavorUnitCost(f) {
         inv.subRecipe.forEach(sr=>{
           const subInv=(state.inventory||[]).find(i=>i.id===sr.inventoryId);
           if(!subInv) return;
-          const subEffective=subInv.costPerUnit||subInv.refPrice||0;
+          const subReal=subInv.totalPaid&&subInv.qtyReceived?subInv.totalPaid/subInv.qtyReceived:subInv.costPerUnit||0;
+          const subRef=subInv.refPriceTotal&&subInv.refQty?subInv.refPriceTotal/subInv.refQty:subInv.refPrice||0;
+          const subEffective=subReal||subRef;
           if(!subEffective) return;
           const subQty=r.qty*(sr.qtyPer100/100);
           const subInvUnit=(subInv.unit||'un').toLowerCase();
@@ -1813,7 +1817,7 @@ function renderInventory(el) {
           <td style="color:var(--dim)">${i.minStock||'—'}</td>
           <td>${isLow?'<span class="badge badge-low">Baixo</span>':'<span class="badge badge-ok">OK</span>'}</td>
           <td style="color:${wastePct>10?'var(--red)':wastePct>0?'var(--gold)':'var(--dim)'}">${wasted>0?wastePct.toFixed(1)+'%':'0%'}</td>
-          <td style="color:var(--muted)">${(()=>{const p=i.costPerUnit||0;const ref=i.refPrice||0;const price=p||ref;if(!price)return '—';const u=i.unit||'un';const isRef=!p&&ref;const val=u==='g'?fmt(price*1000)+'/kg':u==='ml'?fmt(price*1000)+'/l':fmt(price)+'/'+u;return isRef?'<span style="color:var(--gold)" title="Preço de referência">'+val+'</span>':val;})()}</td>
+          <td style="color:var(--muted)">${(()=>{const p=i.totalPaid&&i.qtyReceived?i.totalPaid/i.qtyReceived:i.costPerUnit||0;const ref=i.refPriceTotal&&i.refQty?i.refPriceTotal/i.refQty:i.refPrice||0;const price=p||ref;if(!price)return '—';const u=i.unit||'un';const isRef=!p&&ref;const val=u==='g'?fmt(price*1000)+'/kg':u==='ml'?fmt(price*1000)+'/l':fmt(price)+'/'+u;return isRef?'<span style="color:var(--gold)" title="Preço de referência">'+val+'</span>':val;})()}</td>
           <td style="font-weight:500">${totalSpent>0?fmt(totalSpent):'—'}</td>
         </tr>`;
       }).join('')}</tbody>
