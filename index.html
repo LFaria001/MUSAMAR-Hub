@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774188541';
+var APP_V='t1774283001';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -990,6 +990,7 @@ function renderProductionList() {
         const flavor=(state.flavors||[]).find(f=>f.id===d.flavorId);
         if(!flavor||!flavor.recipe) return;
         flavor.recipe.forEach(r=>{
+          if(r.inventoryId==='__free__') return;
           const inv=(state.inventory||[]).find(x=>x.id===r.inventoryId);
           const name=inv?inv.name:r.inventoryId;
           const unit=r.unit||(inv?inv.unit:'');
@@ -1178,7 +1179,7 @@ function renderProducts(el) {
     <div style="display:grid;gap:8px;margin-bottom:24px">${flavors.map(f=>{
         const uc=flavorUnitCost(f);
         const inv=state.inventory||[];
-        const recipeStr=(f.recipe||[]).map(r=>{const it=inv.find(i=>i.id===r.inventoryId);return it?(r.qty+' '+(r.unit||it.unit||'un')+' '+it.name):'?';}).join(', ');
+        const recipeStr=(f.recipe||[]).map(r=>{if(r.inventoryId==='__free__') return r.freeName||'Livre';const it=inv.find(i=>i.id===r.inventoryId);return it?(r.qty+' '+(r.unit||it.unit||'un')+' '+it.name):'?';}).join(', ');
         return `<div class="card" onclick="openFlavorModal('${f.id}')" style="cursor:pointer;padding:12px">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div style="font-weight:500">${esc(f.name)}</div>
@@ -1281,11 +1282,14 @@ function recipeIngRow(r,inv) {
   r=r||{};
   inv=inv||(state.inventory||[]);
   const units=['g','kg','ml','l','un'];
+  const isFree=r.inventoryId==='__free__';
   return `<div class="recipe-row" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
-    <div class="form-group" style="margin:0"><label class="label">Ingrediente</label><select class="input f-ri-inv">
+    <div class="form-group" style="margin:0"><label class="label">Ingrediente</label><select class="input f-ri-inv" onchange="this.closest('.recipe-row').querySelector('.f-ri-name-wrap').style.display=this.value==='__free__'?'block':'none'">
       <option value="">—</option>
+      <option value="__free__" ${isFree?'selected':''}>Ingrediente livre</option>
       ${inv.map(i=>`<option value="${i.id}" ${r.inventoryId===i.id?'selected':''}>${esc(i.name)}</option>`).join('')}
     </select></div>
+    <div class="form-group f-ri-name-wrap" style="margin:0;${isFree?'':'display:none'}"><label class="label">Nome</label><input class="input f-ri-name" type="text" value="${esc(r.freeName||'')}" placeholder="Ex: Raspas de laranja"></div>
     <div class="form-group" style="margin:0"><label class="label">Qtd/tâmara</label><input class="input f-ri-qty" type="number" step="0.01" min="0" value="${r.qty||''}"></div>
     <div class="form-group" style="margin:0"><label class="label">Unidade</label><select class="input f-ri-unit">${units.map(u=>`<option ${r.unit===u?'selected':''}>${u}</option>`).join('')}</select></div>
     <button class="del-btn" aria-label="Eliminar" onclick="this.closest('.recipe-row').remove()" style="margin-bottom:4px">✕</button>
@@ -1307,7 +1311,10 @@ function saveFlavor(editId) {
     const invId=r.querySelector('.f-ri-inv').value;
     const qty=parseFloat(r.querySelector('.f-ri-qty').value)||0;
     const unit=r.querySelector('.f-ri-unit').value.trim();
-    if(invId&&qty>0) recipe.push({inventoryId:invId,qty,unit});
+    if(invId==='__free__') {
+      const freeName=(r.querySelector('.f-ri-name')?r.querySelector('.f-ri-name').value:'').trim();
+      if(freeName) recipe.push({inventoryId:'__free__',freeName:freeName,qty:qty,unit:unit});
+    } else if(invId&&qty>0) recipe.push({inventoryId:invId,qty,unit});
   });
   if(recipe.length===0) { toast('Adiciona pelo menos um ingrediente à receita.'); return; }
   const data={ name, recipe };
@@ -1367,13 +1374,13 @@ function deductInventoryForOrder(order) {
         const flavor=(state.flavors||[]).find(f=>f.id===d.flavorId);
         if(!flavor||!flavor.recipe) return;
         const totalUnits=d.qty*packQty;
-        flavor.recipe.forEach(r=>deductWithSubRecipe(r.inventoryId,r.qty*totalUnits,r.unit));
+        flavor.recipe.forEach(r=>{ if(r.inventoryId!=='__free__') deductWithSubRecipe(r.inventoryId,r.qty*totalUnits,r.unit); });
       });
     } else if(item.flavorId) {
       const flavor=(state.flavors||[]).find(f=>f.id===item.flavorId);
       if(!flavor||!flavor.recipe) return;
       const totalUnits=packQty*(parseFloat(item.packSize)||0);
-      flavor.recipe.forEach(r=>deductWithSubRecipe(r.inventoryId,r.qty*totalUnits,r.unit));
+      flavor.recipe.forEach(r=>{ if(r.inventoryId!=='__free__') deductWithSubRecipe(r.inventoryId,r.qty*totalUnits,r.unit); });
     }
   });
   order._stockDeducted=true;
