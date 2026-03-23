@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script>
 // Auto-update: fetch version file (cache-busted), redirect if outdated
-var APP_V='t1774283001';
+var APP_V='t1774283998';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -369,6 +369,7 @@ const TABS = [
   // Operacional
   { id:'dashboard', label:'Dashboard', icon:'📊' },
   { id:'orders', label:'Encomendas', icon:'📦' },
+  { id:'production', label:'Produção', icon:'🏭' },
   { id:'products', label:'Produtos', icon:'🍫' },
   { id:'inventory', label:'Inventário', icon:'📋' },
   { id:'customers', label:'Clientes', icon:'👥' },
@@ -534,6 +535,7 @@ function save() {
     flavors: state.flavors || [],
     packs: state.packs || [],
     orders: state.orders || [],
+    production: state.production || [],
     customers: state.customers || [],
     inventory: state.inventory || [],
     feedback: state.feedback || [],
@@ -580,6 +582,7 @@ auth.onAuthStateChanged(function(user) {
       state.flavors = data.flavors || [];
       state.packs = data.packs || [];
       state.orders = data.orders || [];
+      state.production = data.production || [];
       state.customers = data.customers || [];
       state.inventory = data.inventory || [];
       state.feedback = data.feedback || [];
@@ -774,6 +777,7 @@ function render() {
     case 'dashboard': renderDashboard(m); break;
     case 'products': renderProducts(m); break;
     case 'orders': renderOrders(m); break;
+    case 'production': renderProduction(m); break;
     case 'customers': renderCustomers(m); break;
     case 'inventory': renderInventory(m); break;
     case 'feedback': renderFeedback(m); break;
@@ -929,6 +933,7 @@ function renderDashboard(el) {
           <span class="di-icon">⚠️</span>
           <div class="di-content"><div class="di-title">Stock baixo</div><div class="di-value" style="color:var(--red)">${lowStockItems.map(i=>esc(i.name)).join(', ')}</div></div>
         </div>`:''}
+        ${(()=>{const fs=getFinishedStock();const flavors=state.flavors||[];const entries=flavors.filter(f=>(fs[f.id]||0)>0);return entries.length?`<div class="dash-item" onclick="switchTab('production')"><span class="di-icon">🏭</span><div class="di-content"><div class="di-title">Tâmaras prontas</div><div class="di-value">${entries.map(f=>esc(f.name)+': '+(fs[f.id]||0)).join(', ')}</div></div></div>`:'';})()}
         <div class="dash-item" onclick="switchTab('calendar')">
           <span class="di-icon">📅</span>
           <div class="di-content"><div class="di-title">Próximo evento</div><div class="di-value">${upcoming.length?esc(upcoming[0].title):'Sem eventos'}</div></div>
@@ -1367,21 +1372,8 @@ function deductInventoryForOrder(order) {
         if(inv) { inv.qtyUsed=Math.round(((parseFloat(inv.qtyUsed)||0)+(pi.qty*packQty))*100)/100; }
       });
     }
-    // Deduct ingredient items (with sub-recipe expansion)
-    const dates=item.dates||[];
-    if(dates.length) {
-      dates.forEach(d=>{
-        const flavor=(state.flavors||[]).find(f=>f.id===d.flavorId);
-        if(!flavor||!flavor.recipe) return;
-        const totalUnits=d.qty*packQty;
-        flavor.recipe.forEach(r=>{ if(r.inventoryId!=='__free__') deductWithSubRecipe(r.inventoryId,r.qty*totalUnits,r.unit); });
-      });
-    } else if(item.flavorId) {
-      const flavor=(state.flavors||[]).find(f=>f.id===item.flavorId);
-      if(!flavor||!flavor.recipe) return;
-      const totalUnits=packQty*(parseFloat(item.packSize)||0);
-      flavor.recipe.forEach(r=>{ if(r.inventoryId!=='__free__') deductWithSubRecipe(r.inventoryId,r.qty*totalUnits,r.unit); });
-    }
+    // Ingredients are now deducted at production time, not order time.
+    // Finished stock is tracked via getFinishedStock().
   });
   order._stockDeducted=true;
 }
@@ -1460,6 +1452,214 @@ function savePack(editId) {
   save(); closeModal(); render();
 }
 function delPack(id) { pushUndo('Eliminar pack'); state.packs=(state.packs||[]).filter(x=>x.id!==id); save(); closeModal(); render(); }
+
+// ===== PRODUCTION =====
+function getFinishedStock() {
+  // Calculate finished stock per flavor: produced - used in orders
+  const stock={};
+  (state.production||[]).forEach(b=>{
+    (b.items||[]).forEach(it=>{
+      stock[it.flavorId]=(stock[it.flavorId]||0)+it.qty;
+    });
+  });
+  // Subtract dates used in all orders (regardless of status)
+  (state.orders||[]).forEach(o=>{
+    (o.items||[]).forEach(item=>{
+      const packQty=parseFloat(item.qty)||0;
+      (item.dates||[]).forEach(d=>{
+        stock[d.flavorId]=(stock[d.flavorId]||0)-(d.qty*packQty);
+      });
+    });
+  });
+  return stock;
+}
+
+function renderProduction(el) {
+  const batches=state.production||[];
+  const flavors=state.flavors||[];
+  const stock=getFinishedStock();
+
+  el.innerHTML=`
+    <div class="section-header">
+      <div><h1>Produção</h1><div class="sub">${batches.length} ${batches.length===1?'batch':'batches'}</div></div>
+      <button class="btn btn-primary" onclick="openProductionModal()">+ Nova Produção</button>
+    </div>
+    ${flavors.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:16px">
+      ${flavors.map(f=>{
+        const qty=stock[f.id]||0;
+        return `<div class="card" style="padding:12px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:${qty>0?'var(--green)':qty<0?'var(--red)':'var(--muted)'}">${qty}</div>
+          <div style="font-size:11px;color:var(--muted)">${esc(f.name)}</div>
+        </div>`;
+      }).join('')}
+    </div>`:''}
+    ${batches.length?`<div class="card" style="padding:0;overflow-x:auto"><table class="data-table">
+      <thead><tr><th>Data</th><th>Sabores</th><th>Total</th><th>Por</th></tr></thead>
+      <tbody>${batches.slice().reverse().map(b=>{
+        const itemStr=(b.items||[]).map(it=>{const f=flavors.find(x=>x.id===it.flavorId);return (f?esc(f.name):'?')+'×'+it.qty;}).join(', ');
+        const total=(b.items||[]).reduce((s,it)=>s+it.qty,0);
+        return `<tr onclick="viewProductionBatch('${b.id}')">
+          <td style="color:var(--muted)">${b.date||'—'}</td>
+          <td>${itemStr}</td>
+          <td style="font-weight:600">${total}</td>
+          <td style="color:var(--muted)">${esc(b.createdBy||'—')}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`:'<div class="empty"><div class="icon">🏭</div><p>Sem produções registadas.</p></div>'}`;
+}
+
+function openProductionModal(editId) {
+  const b=editId?(state.production||[]).find(x=>x.id===editId):null;
+  const flavors=state.flavors||[];
+  openModal(b?'Editar Produção':'Nova Produção', `
+    <div class="form-group"><label class="label">Data</label><input class="input" type="date" id="f-prod-date" value="${b?b.date:new Date().toISOString().slice(0,10)}"></div>
+    <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:12px 0 8px;font-weight:600">Tâmaras produzidas</div>
+    <div id="f-prod-items">${(b?b.items:[]).map(it=>prodItemRow(it,flavors)).join('')}</div>
+    <button class="btn btn-ghost btn-full" onclick="addProdItemRow()" style="margin-bottom:12px">+ Adicionar Sabor</button>
+    <div class="form-group"><label class="label">Notas</label><textarea class="input" id="f-prod-notes">${esc(b?b.notes:'')}</textarea></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary btn-full" onclick="saveProduction('${editId||''}')">${b?'Guardar':'Registar Produção'}</button>
+      ${b?`<button class="btn btn-ghost" onclick="delProduction('${b.id}')" style="color:var(--red)">Eliminar</button>`:''}
+    </div>
+  `);
+}
+
+function prodItemRow(it, flavors) {
+  it=it||{};
+  flavors=flavors||(state.flavors||[]);
+  return `<div class="prod-item-row" style="display:grid;grid-template-columns:2fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+    <div class="form-group" style="margin:0"><label class="label">Sabor</label><select class="input f-pi-flavor">
+      <option value="">—</option>
+      ${flavors.map(f=>`<option value="${f.id}" ${it.flavorId===f.id?'selected':''}>${esc(f.name)}</option>`).join('')}
+    </select></div>
+    <div class="form-group" style="margin:0"><label class="label">Quantidade</label><input class="input f-pi-qty" type="number" step="1" min="1" value="${it.qty||''}"></div>
+    <button class="del-btn" aria-label="Eliminar" onclick="this.closest('.prod-item-row').remove()" style="margin-bottom:4px">✕</button>
+  </div>`;
+}
+
+function addProdItemRow() {
+  const div=document.createElement('div');
+  div.innerHTML=prodItemRow({},state.flavors||[]);
+  document.getElementById('f-prod-items').appendChild(div.firstElementChild);
+}
+
+function saveProduction(editId) {
+  const date=$('#f-prod-date').value;
+  const notes=$('#f-prod-notes').value.trim();
+  const items=[];
+  document.querySelectorAll('#f-prod-items .prod-item-row').forEach(r=>{
+    const flavorId=r.querySelector('.f-pi-flavor').value;
+    const qty=parseInt(r.querySelector('.f-pi-qty').value)||0;
+    if(flavorId&&qty>0) items.push({flavorId,qty});
+  });
+  if(!items.length) { toast('Adiciona pelo menos um sabor.'); return; }
+  pushUndo(editId?'Editar produção':'Nova produção');
+  if(!state.production) state.production=[];
+  if(editId) {
+    const b=state.production.find(x=>x.id===editId);
+    if(b) {
+      // Reverse old deductions before applying new ones
+      reverseProductionDeduction(b);
+      Object.assign(b, {date,notes,items});
+      deductProductionIngredients(b);
+    }
+  } else {
+    const batch={id:uid(),date,notes,items,createdBy:chatUser,createdAt:new Date().toISOString()};
+    deductProductionIngredients(batch);
+    state.production.push(batch);
+  }
+  save(); closeModal(); render();
+  toast('Produção registada!');
+}
+
+function deductProductionIngredients(batch) {
+  (batch.items||[]).forEach(it=>{
+    const flavor=(state.flavors||[]).find(f=>f.id===it.flavorId);
+    if(!flavor||!flavor.recipe) return;
+    flavor.recipe.forEach(r=>{
+      if(r.inventoryId!=='__free__') deductWithSubRecipe(r.inventoryId, r.qty*it.qty, r.unit);
+    });
+  });
+}
+
+function reverseProductionDeduction(batch) {
+  (batch.items||[]).forEach(it=>{
+    const flavor=(state.flavors||[]).find(f=>f.id===it.flavorId);
+    if(!flavor||!flavor.recipe) return;
+    flavor.recipe.forEach(r=>{
+      if(r.inventoryId==='__free__') return;
+      const inv=(state.inventory||[]).find(i=>i.id===r.inventoryId);
+      if(!inv) return;
+      const invUnit=inv.unit||'un';
+      let qty=r.qty*it.qty;
+      if(r.unit==='g'&&invUnit==='kg') qty=qty/1000;
+      else if(r.unit==='kg'&&invUnit==='g') qty=qty*1000;
+      else if(r.unit==='ml'&&invUnit==='l') qty=qty/1000;
+      else if(r.unit==='l'&&invUnit==='ml') qty=qty*1000;
+      inv.qtyUsed=Math.max(0, Math.round(((parseFloat(inv.qtyUsed)||0)-qty)*100)/100);
+      if(inv.subRecipe&&inv.subRecipe.length) {
+        inv.subRecipe.forEach(sr=>{
+          const subInv=(state.inventory||[]).find(i=>i.id===sr.inventoryId);
+          if(!subInv) return;
+          const subQty=(r.qty*it.qty)*(sr.qtyPer100/100);
+          const subInvUnit=subInv.unit||'un';
+          let subDeduct=subQty;
+          if(sr.unit==='g'&&subInvUnit==='kg') subDeduct=subQty/1000;
+          else if(sr.unit==='kg'&&subInvUnit==='g') subDeduct=subQty*1000;
+          else if(sr.unit==='ml'&&subInvUnit==='l') subDeduct=subQty/1000;
+          else if(sr.unit==='l'&&subInvUnit==='ml') subDeduct=subQty*1000;
+          subInv.qtyUsed=Math.max(0, Math.round(((parseFloat(subInv.qtyUsed)||0)-subDeduct)*100)/100);
+        });
+      }
+    });
+  });
+}
+
+function viewProductionBatch(id) {
+  const b=(state.production||[]).find(x=>x.id===id);
+  if(!b) return;
+  const flavors=state.flavors||[];
+  const inv=state.inventory||[];
+  const total=(b.items||[]).reduce((s,it)=>s+it.qty,0);
+  // Calculate ingredients used
+  const ingUsed={};
+  (b.items||[]).forEach(it=>{
+    const flavor=flavors.find(f=>f.id===it.flavorId);
+    if(!flavor||!flavor.recipe) return;
+    flavor.recipe.forEach(r=>{
+      if(r.inventoryId==='__free__') { const k='free_'+r.freeName; ingUsed[k]={name:r.freeName||'Livre',unit:r.unit,qty:(ingUsed[k]?ingUsed[k].qty:0)+r.qty*it.qty,free:true}; return; }
+      const item=inv.find(i=>i.id===r.inventoryId);
+      const name=item?item.name:r.inventoryId;
+      const unit=r.unit;
+      const k=r.inventoryId+'_'+unit;
+      ingUsed[k]={name,unit,qty:(ingUsed[k]?ingUsed[k].qty:0)+r.qty*it.qty};
+    });
+  });
+  openModal('Produção — '+b.date, `
+    <div style="margin-bottom:12px">
+      ${(b.items||[]).map(it=>{const f=flavors.find(x=>x.id===it.flavorId);return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>${esc(f?f.name:'?')}</span><span style="font-weight:600">${it.qty} un</span></div>`;}).join('')}
+      <div style="display:flex;justify-content:space-between;padding:8px 0;font-weight:700"><span>Total</span><span>${total} tâmaras</span></div>
+    </div>
+    <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:12px 0 8px;font-weight:600">Ingredientes utilizados</div>
+    ${Object.values(ingUsed).map(ig=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:var(--muted)"><span>${esc(ig.name)}${ig.free?' (livre)':''}</span><span>${ig.qty}${ig.unit}</span></div>`).join('')}
+    ${b.notes?`<div style="margin-top:12px;padding:8px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--muted)">${esc(b.notes)}</div>`:''}
+    <div style="font-size:11px;color:var(--dim);margin-top:12px">Por ${esc(b.createdBy||'—')} em ${b.createdAt?new Date(b.createdAt).toLocaleString('pt'):'—'}</div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-ghost btn-full" onclick="openProductionModal('${b.id}')">Editar</button>
+      <button class="btn btn-ghost" onclick="delProduction('${b.id}')" style="color:var(--red)">Eliminar</button>
+    </div>
+  `);
+}
+
+function delProduction(id) {
+  const b=(state.production||[]).find(x=>x.id===id);
+  if(!b) return;
+  pushUndo('Eliminar produção');
+  reverseProductionDeduction(b);
+  state.production=(state.production||[]).filter(x=>x.id!==id);
+  save(); closeModal(); render();
+  toast('Produção eliminada');
+}
 
 // ===== ORDERS =====
 let orderFilter='all';
