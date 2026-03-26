@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script>
-var APP_V='t1774537743';
+var APP_V='t1774555386';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -628,12 +628,18 @@ function onOrderConfirmed(o){
   });
   o._reservedStock=reservedStock;
   // Reserve packaging
-  const pack=(state.packs||[]).find(p=>p.id===o.packId);
   const reservedPkg=[];
-  if(pack&&pack.packagingItems){
-    pack.packagingItems.forEach(pi=>{
-      reservedPkg.push({inventoryId:pi.inventoryId,qty:pi.qty*totalQty});
+  if(o.isException&&o.exceptionPkg){
+    o.exceptionPkg.forEach(ep=>{
+      reservedPkg.push({inventoryId:ep.inventoryId,qty:ep.qty});
     });
+  } else {
+    const pack=(state.packs||[]).find(p=>p.id===o.packId);
+    if(pack&&pack.packagingItems){
+      pack.packagingItems.forEach(pi=>{
+        reservedPkg.push({inventoryId:pi.inventoryId,qty:pi.qty*totalQty});
+      });
+    }
   }
   o._reservedPackaging=reservedPkg;
   // Calculate estimated cost
@@ -879,14 +885,15 @@ function openOrderModal(editId){
       <div id="f-ord-count" style="font-size:11px;color:var(--muted);text-align:right;margin-bottom:8px"></div>
     </div>
 
-    <div id="f-ord-exception" style="${isExc?'':'display:none'}">
+    <div id="f-ord-exception-block" style="${isExc?'':'display:none'}">
       <div class="form-group"><label class="label">Descrição da exceção</label><textarea class="input" id="f-ord-exc-notes" placeholder="Descreve o que o cliente quer...">${esc(o&&o.isException?o.exceptionNotes:'')}</textarea></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="form-group"><label class="label">Nº de tâmaras</label><input class="input" type="number" min="1" id="f-ord-exc-qty" value="${o&&o.isException?((o.flavors||[]).reduce((s,f)=>s+f.qty,0)*(parseFloat(o.qty)||1)):''}" placeholder="Total"></div>
-        <div class="form-group"><label class="label">Preço manual (€)</label><input class="input" type="number" step="0.01" min="0" id="f-ord-exc-price" value="${o&&o.isException?o.totalPrice:''}" placeholder="0.00"></div>
-      </div>
+      <div class="form-group"><label class="label">Preço manual (€)</label><input class="input" type="number" step="0.01" min="0" id="f-ord-exc-price" value="${o&&o.isException?o.totalPrice:''}" placeholder="0.00"></div>
+      <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:12px 0 6px;font-weight:600">Composição de sabores</div>
       <div id="f-ord-exc-flavors">${(o&&o.isException?(o.flavors||[]):[]).map(fl=>orderFlavorRow(fl)).join('')}</div>
-      <button class="btn btn-ghost btn-full" onclick="addOrderFlavorRow('exc')" style="margin-bottom:8px;font-size:10px">+ Sabor</button>
+      <button class="btn btn-ghost btn-full" onclick="addOrderFlavorRow('exc')" style="margin-bottom:12px;font-size:10px">+ Sabor</button>
+      <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:8px 0 6px;font-weight:600">Embalagem personalizada</div>
+      <div id="f-ord-exc-pkg">${(o&&o.isException&&o.exceptionPkg?(o.exceptionPkg||[]):[]).map(r=>excPkgRow(r)).join('')}</div>
+      <button class="btn btn-ghost btn-full" onclick="addExcPkgRow()" style="margin-bottom:8px;font-size:10px">+ Item de embalagem</button>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
@@ -909,7 +916,22 @@ function openOrderModal(editId){
 function toggleOrderException(){
   const isExc=$('#f-ord-exception').checked;
   document.getElementById('f-ord-standard').style.display=isExc?'none':'';
-  document.getElementById('f-ord-exception').style.display=isExc?'':'none';
+  document.getElementById('f-ord-exception-block').style.display=isExc?'':'none';
+}
+
+function excPkgRow(r){
+  r=r||{};
+  const pkgInv=(state.inventory||[]).filter(i=>i.category==='Embalagem'||i.category==='Rótulos');
+  return `<div class="pkg-row" style="display:grid;grid-template-columns:2fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+    <div class="form-group" style="margin:0"><select class="input f-exc-pkg-inv"><option value="">—</option>${pkgInv.map(i=>`<option value="${i.id}" ${r.inventoryId===i.id?'selected':''}>${esc(i.name)}</option>`).join('')}</select></div>
+    <div class="form-group" style="margin:0"><input class="input f-exc-pkg-qty" type="number" step="1" min="1" value="${r.qty||1}"></div>
+    <button class="del-btn" onclick="this.closest('.pkg-row').remove()" style="margin-bottom:4px">✕</button>
+  </div>`;
+}
+
+function addExcPkgRow(){
+  const div=document.createElement('div');div.innerHTML=excPkgRow({});
+  document.getElementById('f-ord-exc-pkg').appendChild(div.firstElementChild);
 }
 
 function orderFlavorRow(fl){
@@ -1005,10 +1027,20 @@ function saveOrder(editId){
     if(fId&&qty>0) flavors.push({flavorId:fId,flavorName:f?f.name:'?',qty});
   });
 
+  // Collect exception packaging
+  const exceptionPkg=[];
+  if(isExc){
+    document.querySelectorAll('#f-ord-exc-pkg .pkg-row').forEach(row=>{
+      const invId=row.querySelector('.f-exc-pkg-inv').value;
+      const qty=parseFloat(row.querySelector('.f-exc-pkg-qty').value)||0;
+      if(invId&&qty>0) exceptionPkg.push({inventoryId:invId,qty});
+    });
+  }
+
   let packId='',packSize=0,qty=1,totalPrice=0;
   if(isExc){
     qty=1;
-    packSize=parseInt($('#f-ord-exc-qty').value)||flavors.reduce((s,f)=>s+f.qty,0);
+    packSize=flavors.reduce((s,f)=>s+f.qty,0);
     totalPrice=parseFloat($('#f-ord-exc-price').value)||0;
   } else {
     const sel=$('#f-ord-pack');
@@ -1027,7 +1059,7 @@ function saveOrder(editId){
     customerId, customerName, contact:$('#f-ord-contact').value.trim(),
     deliveryZone:$('#f-ord-zone').value.trim(),
     packId, packSize, qty, flavors,
-    isException:isExc, exceptionNotes:isExc?$('#f-ord-exc-notes').value.trim():'',
+    isException:isExc, exceptionNotes:isExc?$('#f-ord-exc-notes').value.trim():'', exceptionPkg:isExc?exceptionPkg:[],
     totalPrice, paymentStatus:$('#f-ord-pay').value,
     deliveryCost:parseFloat($('#f-ord-delivery').value)||0,
     notes:$('#f-ord-notes').value.trim(),
@@ -1109,6 +1141,7 @@ function viewOrder(id){
     <div class="label">Composição</div>
     <div style="margin-bottom:14px">${(o.flavors||[]).map(fl=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border)"><span>${esc(fl.flavorName)}</span><span style="font-weight:600">${fl.qty}×</span></div>`).join('')}</div>
     ${o.exceptionNotes?`<div style="margin-bottom:12px"><div class="label">Notas da exceção</div><p style="font-size:12px;color:var(--muted)">${esc(o.exceptionNotes)}</p></div>`:''}
+    ${o.isException&&o.exceptionPkg&&o.exceptionPkg.length?`<div class="label">Embalagem</div><div style="margin-bottom:14px">${o.exceptionPkg.map(ep=>{const inv=(state.inventory||[]).find(i=>i.id===ep.inventoryId);return `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border)"><span>${inv?esc(inv.name):'?'}</span><span style="font-weight:600">${ep.qty}×</span></div>`;}).join('')}</div>`:''}
     <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;font-weight:600"><span>Total</span><span>${fmt(rev)}</span></div>
     <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;color:var(--muted)"><span>Custo estimado</span><span>${fmt(cost)}</span></div>
     <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;font-weight:600;color:${prof>=0?'var(--green)':'var(--red)'}"><span>Lucro</span><span>${fmt(prof)}</span></div>
