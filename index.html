@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script>
-var APP_V='t1774558545';
+var APP_V='t1774558665';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -372,8 +372,8 @@ function migrateData(){
   if(state.finances&&state.finances.length){
     state.finances.forEach(f=>{ if(!f.category) f.category=''; });
   }
-  // Seed recipe ingredients into inventory if not present
-  if(!state._ingredientsSeeded){
+  // Seed recipe ingredients into inventory if not present (only after Firestore loaded)
+  if(!state._ingredientsSeeded&&firestoreReady){
     if(!state.inventory) state.inventory=[];
     const seeds=[
       {name:'Tâmaras Medjool',category:'Tâmaras',unit:'g'},
