@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script>
-var APP_V='t1774566373';
+var APP_V='t1774566596';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -1923,9 +1923,7 @@ function renderAnalytics(el){
   else if(analyticsPeriod==='quarter'){const q=new Date(now.getFullYear(),now.getMonth()-2,1).toISOString().slice(0,10);filteredExpenses=allExpenses.filter(i=>i.date&&i.date>=q);}
   const totalExpenses=filteredExpenses.reduce((s,i)=>s+(parseFloat(i.amount)||0),0);
 
-  const invItems=state.inventory||[];
-  const totalInvCost=invItems.reduce((s,i)=>s+(i.totalPaid!=null?i.totalPaid:(parseFloat(i.qtyReceived)||0)*(parseFloat(i.costPerUnit)||0)),0);
-  const netProfit=totalRev-totalInvCost-totalExpenses;
+  const netProfit=totalProfit-totalExpenses;
 
   // Monthly comparison
   const monthlyData={};
@@ -1983,7 +1981,6 @@ function renderAnalytics(el){
       <div class="kpi-card" style="cursor:pointer" onclick="drillOrders('Receita',_aFiltered)"><div class="kpi-label">Receita</div><div class="kpi-value" style="color:var(--green)">${fmt(totalRev)}</div><div class="kpi-sub">${filtered.length} encomendas</div></div>
       <div class="kpi-card" style="cursor:pointer" onclick="drillOrders('Custo Vendas',_aFiltered)"><div class="kpi-label">Custo Vendas</div><div class="kpi-value" style="color:var(--red)">${fmt(totalCost)}</div></div>
       <div class="kpi-card" style="cursor:pointer" onclick="drillOrders('Lucro Bruto',_aFiltered)"><div class="kpi-label">Lucro Bruto</div><div class="kpi-value" style="color:${totalProfit>=0?'var(--green)':'var(--red)'}">${fmt(totalProfit)}</div><div class="kpi-sub">Margem ${avgMargin.toFixed(1)}%</div></div>
-      <div class="kpi-card"><div class="kpi-label">Investimento Inv.</div><div class="kpi-value" style="color:var(--red)">${fmt(totalInvCost)}</div></div>
       <div class="kpi-card" style="cursor:pointer" onclick="drillExpenses(_aFilteredExp)"><div class="kpi-label">Despesas Op.</div><div class="kpi-value" style="color:var(--red)">${fmt(totalExpenses)}</div></div>
       <div class="kpi-card"><div class="kpi-label">Lucro Líquido</div><div class="kpi-value" style="color:${netProfit>=0?'var(--gold)':'var(--red)'}">${fmt(netProfit)}</div></div>
       <div class="kpi-card" style="cursor:pointer" onclick="drillOrders('Ticket Médio',_aFiltered)"><div class="kpi-label">Ticket Médio</div><div class="kpi-value">${fmt(avgTicket)}</div></div>
