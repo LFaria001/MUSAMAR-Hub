@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script>
-var APP_V='t1774566596';
+var APP_V='t1774567260';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -276,7 +276,6 @@ const ORDER_STATUSES = ['por confirmar','confirmado','em preparação','pronto',
 const PAY_STATUSES = ['pendente','pago'];
 const INV_CATS = ['Tâmaras','Recheios','Embalagem','Rótulos','Outro'];
 const INV_UNITS = ['un','kg','g','L','ml'];
-const PACK_SIZES = [3, 6, 10];
 const CHANNELS = ['Instagram','TikTok','WhatsApp','Website','Referência','Outro'];
 
 const DEFAULT = {
@@ -345,7 +344,7 @@ function save(){
     finances:state.finances||[], expenseCategories:state.expenseCategories||[],
     orderSeq:state.orderSeq||0,
     // Preserve archived data for rollback
-    _archivedOrders:state._archivedOrders||[], _ingredientsSeeded:state._ingredientsSeeded||false,
+    _archivedOrders:state._archivedOrders||[],
     chat:state.chat||[], objectives:state.objectives||{},
     weekLabel:state.weekLabel||'', weekEnd:state.weekEnd||'',
     futureWeeks:state.futureWeeks||[], accountability:state.accountability||[],
@@ -415,7 +414,7 @@ auth.onAuthStateChanged(function(user){
       const data=snap.data();
       // Load all fields
       const fields=['orders','production','flavors','packs','inventory','customers','finances',
-        'expenseCategories','_archivedOrders','_ingredientsSeeded','chat','objectives','weekLabel','weekEnd',
+        'expenseCategories','_archivedOrders','chat','objectives','weekLabel','weekEnd',
         'futureWeeks','accountability','calendar','notes','feedback','inspiration',
         'brandAssets','recipes','productionLogs','orderSeq'];
       fields.forEach(f=>{ if(data[f]!==undefined) state[f]=data[f]; });
@@ -560,8 +559,12 @@ function orderEstimatedCost(o){
     if(flavor) cost+=flavorUnitCost(flavor)*fl.qty*totalQty;
   });
   // Packaging cost
-  const pack=(state.packs||[]).find(p=>p.id===o.packId);
-  if(pack) cost+=(parseFloat(pack.packagingCost)||0)*totalQty;
+  if(o.isException&&o.exceptionPkg){
+    o.exceptionPkg.forEach(ep=>{ cost+=(parseFloat(ep.qty)||0)*(parseFloat(ep.unitCost)||0); });
+  } else {
+    const pack=(state.packs||[]).find(p=>p.id===o.packId);
+    if(pack) cost+=(parseFloat(pack.packagingCost)||0)*totalQty;
+  }
   return cost;
 }
 function orderCost(o){ return orderEstimatedCost(o)+(parseFloat(o.deliveryCost)||0); }
@@ -651,23 +654,6 @@ function onOrderConfirmed(o){
     reservedStock.push({flavorId:fl.flavorId,qty:fl.qty*totalQty});
   });
   o._reservedStock=reservedStock;
-  // Reserve packaging
-  const reservedPkg=[];
-  if(o.isException&&o.exceptionPkg){
-    o.exceptionPkg.forEach(ep=>{
-      reservedPkg.push({inventoryId:ep.inventoryId,qty:ep.qty});
-    });
-  } else {
-    const pack=(state.packs||[]).find(p=>p.id===o.packId);
-    if(pack&&pack.packagingItems){
-      pack.packagingItems.forEach(pi=>{
-        reservedPkg.push({inventoryId:pi.inventoryId,qty:pi.qty*totalQty});
-      });
-    }
-  }
-  o._reservedPackaging=reservedPkg;
-  // Calculate estimated cost
-  o.estimatedCost=Math.round(orderEstimatedCost(o)*100)/100;
   // Check stock sufficiency
   const available=getAvailableStock();
   let needsProd=false;
@@ -675,104 +661,19 @@ function onOrderConfirmed(o){
     if((available[rs.flavorId]||0)<rs.qty) needsProd=true;
   });
   o._productionNeeded=needsProd;
-  o._packagingDeducted=false;
-  o._stockDeducted=false;
 }
 
-function onOrderReady(o){
-  if(o._packagingDeducted) return;
-  (o._reservedPackaging||[]).forEach(rp=>{
-    const inv=(state.inventory||[]).find(i=>i.id===rp.inventoryId);
-    if(inv) inv.qtyUsed=Math.round(((parseFloat(inv.qtyUsed)||0)+rp.qty)*100)/100;
-  });
-  o._packagingDeducted=true;
-}
+function onOrderReady(o){}
 
 function onOrderDelivered(o){
-  o._stockDeducted=true;
   o._productionNeeded=false;
 }
 
 function onOrderCancelled(o){
-  // Reverse packaging deduction if it was already done
-  if(o._packagingDeducted){
-    (o._reservedPackaging||[]).forEach(rp=>{
-      const inv=(state.inventory||[]).find(i=>i.id===rp.inventoryId);
-      if(inv) inv.qtyUsed=Math.max(0,Math.round(((parseFloat(inv.qtyUsed)||0)-rp.qty)*100)/100);
-    });
-  }
   o._reservedStock=[];
-  o._reservedPackaging=[];
-  o._packagingDeducted=false;
-  o._stockDeducted=false;
   o._productionNeeded=false;
 }
 
-// ===== PRODUCTION INGREDIENT DEDUCTIONS =====
-function deductWithSubRecipe(invId,qty,recipeUnit){
-  const inv=(state.inventory||[]).find(i=>i.id===invId); if(!inv) return;
-  const invUnit=inv.unit||'un';
-  let deductQty=qty;
-  if(recipeUnit==='g'&&invUnit==='kg') deductQty=qty/1000;
-  else if(recipeUnit==='kg'&&invUnit==='g') deductQty=qty*1000;
-  else if(recipeUnit==='ml'&&invUnit==='l') deductQty=qty/1000;
-  else if(recipeUnit==='l'&&invUnit==='ml') deductQty=qty*1000;
-  inv.qtyUsed=Math.round(((parseFloat(inv.qtyUsed)||0)+deductQty)*100)/100;
-  if(inv.subRecipe&&inv.subRecipe.length){
-    inv.subRecipe.forEach(sr=>{
-      const subQty=qty*(sr.qtyPer100/100);
-      const subInv=(state.inventory||[]).find(i=>i.id===sr.inventoryId); if(!subInv) return;
-      const subIU=subInv.unit||'un';
-      let sd=subQty;
-      if(sr.unit==='g'&&subIU==='kg') sd=subQty/1000;
-      else if(sr.unit==='kg'&&subIU==='g') sd=subQty*1000;
-      else if(sr.unit==='ml'&&subIU==='l') sd=subQty/1000;
-      else if(sr.unit==='l'&&subIU==='ml') sd=subQty*1000;
-      subInv.qtyUsed=Math.round(((parseFloat(subInv.qtyUsed)||0)+sd)*100)/100;
-    });
-  }
-}
-
-function deductProductionIngredients(batch){
-  (batch.items||[]).forEach(it=>{
-    const flavor=(state.flavors||[]).find(f=>f.id===it.flavorId);
-    if(!flavor||!flavor.recipe) return;
-    flavor.recipe.forEach(r=>{
-      if(r.inventoryId!=='__free__') deductWithSubRecipe(r.inventoryId,r.qty*it.qty,r.unit);
-    });
-  });
-}
-
-function reverseProductionDeduction(batch){
-  (batch.items||[]).forEach(it=>{
-    const flavor=(state.flavors||[]).find(f=>f.id===it.flavorId);
-    if(!flavor||!flavor.recipe) return;
-    flavor.recipe.forEach(r=>{
-      if(r.inventoryId==='__free__') return;
-      const inv=(state.inventory||[]).find(i=>i.id===r.inventoryId); if(!inv) return;
-      const invUnit=inv.unit||'un';
-      let qty=r.qty*it.qty;
-      if(r.unit==='g'&&invUnit==='kg') qty/=1000;
-      else if(r.unit==='kg'&&invUnit==='g') qty*=1000;
-      else if(r.unit==='ml'&&invUnit==='l') qty/=1000;
-      else if(r.unit==='l'&&invUnit==='ml') qty*=1000;
-      inv.qtyUsed=Math.max(0,Math.round(((parseFloat(inv.qtyUsed)||0)-qty)*100)/100);
-      if(inv.subRecipe&&inv.subRecipe.length){
-        inv.subRecipe.forEach(sr=>{
-          const subInv=(state.inventory||[]).find(i=>i.id===sr.inventoryId); if(!subInv) return;
-          const subQty=(r.qty*it.qty)*(sr.qtyPer100/100);
-          const subIU=subInv.unit||'un';
-          let sd=subQty;
-          if(sr.unit==='g'&&subIU==='kg') sd/=1000;
-          else if(sr.unit==='kg'&&subIU==='g') sd*=1000;
-          else if(sr.unit==='ml'&&subIU==='l') sd/=1000;
-          else if(sr.unit==='l'&&subIU==='ml') sd*=1000;
-          subInv.qtyUsed=Math.max(0,Math.round(((parseFloat(subInv.qtyUsed)||0)-sd)*100)/100);
-        });
-      }
-    });
-  });
-}
 
 // ===== DASHBOARD =====
 function renderDashboard(el){
@@ -1104,9 +1005,6 @@ function saveOrder(editId){
     data.orderNum=state.orderSeq;
     data.createdAt=Date.now();
     data._reservedStock=[];
-    data._reservedPackaging=[];
-    data._packagingDeducted=false;
-    data._stockDeducted=false;
     data._productionNeeded=false;
     state.orders.push(data);
     handleStatusChange(data,null,newStatus);
@@ -1124,7 +1022,7 @@ function handleStatusChange(o,oldStatus,newStatus){
   if(newStatus==='cancelado'&&oldStatus!=='cancelado') onOrderCancelled(o);
   // If going back from confirmed to por confirmar, release reservations
   if(newStatus==='por confirmar'&&(oldStatus==='confirmado'||oldStatus==='em preparação')){
-    o._reservedStock=[];o._reservedPackaging=[];o._productionNeeded=false;
+    o._reservedStock=[];o._productionNeeded=false;
   }
 }
 
@@ -1368,10 +1266,9 @@ function saveProduction(editId){
   if(!state.production) state.production=[];
   if(editId){
     const b=state.production.find(x=>x.id===editId);
-    if(b){reverseProductionDeduction(b);Object.assign(b,{date,expiryDate,notes,items});deductProductionIngredients(b);}
+    if(b){Object.assign(b,{date,expiryDate,notes,items});}
   } else {
     const batch={id:uid(),date,expiryDate,notes,items,createdBy:chatUser,createdAt:new Date().toISOString()};
-    deductProductionIngredients(batch);
     state.production.push(batch);
   }
   save();closeModal();render();toast('Produção registada!');
@@ -1401,7 +1298,7 @@ function viewProductionBatch(id){
 
 function delProduction(id){
   const b=(state.production||[]).find(x=>x.id===id);if(!b)return;
-  pushUndo('Eliminar produção');reverseProductionDeduction(b);
+  pushUndo('Eliminar produção');
   state.production=(state.production||[]).filter(x=>x.id!==id);
   save();closeModal();render();toast('Produção eliminada');
 }
