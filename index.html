@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script>
-var APP_V='t1774560439';
+var APP_V='t1774561568';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -1198,18 +1198,12 @@ function openPackModal(editId){
     <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:12px"><div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;font-weight:600">Novo Pack</div></div></div>`:''}
     <div class="form-group"><label class="label">Tamanho (nº tâmaras)</label><input class="input" type="number" step="1" min="1" id="f-pack-size" value="${p?p.size:''}" placeholder="3, 6 ou 10"></div>
     <div class="form-group"><label class="label">Preço de venda (€)</label><input class="input" type="number" step="0.01" min="0" id="f-pack-price" value="${p?p.salePrice:''}" placeholder="Preço fixo do pack"></div>
-    <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;font-weight:600;display:flex;align-items:center;justify-content:space-between">
-      Embalagem <span id="f-pack-pkg-calc" style="color:var(--dim);font-weight:400"></span>
-    </div>
-    <div id="f-pack-pkglist">${pkgItems.map(r=>packPkgRow(r,pkgInv)).join('')}</div>
-    <button class="btn btn-ghost btn-full" onclick="addPackPkgRow()" style="margin-bottom:8px">+ Item</button>
-    <input type="hidden" id="f-pack-pkg" value="${p?p.packagingCost:'0'}">
+    <div class="form-group"><label class="label">Custo de embalagem (€)</label><input class="input" type="number" step="0.01" min="0" id="f-pack-pkg" value="${p?p.packagingCost:'0'}" placeholder="Custo total da embalagem por pack"></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary btn-full" onclick="savePack('${editId||''}')">${p?'Guardar':'Criar Pack'}</button>
       ${p?`<button class="btn btn-ghost" onclick="delPack('${p.id}')" style="color:var(--red)">Eliminar</button>`:''}
     </div>
   `);
-  setTimeout(()=>calcPackPkgTotal(),50);
 }
 function packPkgRow(r,inv){
   r=r||{};inv=inv||(state.inventory||[]).filter(i=>i.category==='Embalagem'||i.category==='Rótulos');
@@ -1239,13 +1233,8 @@ function savePack(editId){
   pushUndo(editId?'Editar pack':'Novo pack');
   const size=parseInt($('#f-pack-size').value);if(!size||size<=0){toast('Introduz um tamanho válido.');return;}
   const salePrice=parseFloat($('#f-pack-price').value)||0;if(salePrice<=0){toast('Introduz um preço de venda.');return;}
-  const packagingItems=[];
-  document.querySelectorAll('#f-pack-pkglist .pkg-row').forEach(row=>{
-    const invId=row.querySelector('.f-pkg-inv').value;
-    const qty=parseFloat(row.querySelector('.f-pkg-qty').value)||0;
-    if(invId&&qty>0) packagingItems.push({inventoryId:invId,qty});
-  });
-  const data={size,salePrice,packagingCost:parseFloat($('#f-pack-pkg').value)||0,packagingItems};
+  const packagingCost=parseFloat($('#f-pack-pkg').value)||0;
+  const data={size,salePrice,packagingCost,packagingItems:editId?(state.packs.find(x=>x.id===editId)||{}).packagingItems||[]:[]};
   if(!state.packs) state.packs=[];
   if(editId){const p=state.packs.find(x=>x.id===editId);if(p)Object.assign(p,data);}
   else{data.id=uid();state.packs.push(data);}
