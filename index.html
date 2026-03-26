@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script>
-var APP_V='t1774561568';
+var APP_V='t1774564576';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -388,6 +388,8 @@ function migrateData(){
       {name:'Pasta de Amêndoa',category:'Recheios',unit:'g'},
       {name:'Raspas de Laranja',category:'Recheios',unit:'g'},
       {name:'Miolo de Amêndoa',category:'Recheios',unit:'g'},
+      {name:'Fita',category:'Embalagem',unit:'un'},
+      {name:'Cupcakes',category:'Embalagem',unit:'un'},
     ];
     let added=false;
     seeds.forEach(s=>{
