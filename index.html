@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script>
-var APP_V='t1774557844';
+var APP_V='t1774558167';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -371,6 +371,29 @@ function migrateData(){
   // Migrate old finances to include category support
   if(state.finances&&state.finances.length){
     state.finances.forEach(f=>{ if(!f.category) f.category=''; });
+  }
+  // Seed recipe ingredients into inventory if not present
+  if(!state._ingredientsSeeded){
+    if(!state.inventory) state.inventory=[];
+    const seeds=[
+      {name:'Tâmaras Medjool',category:'Tâmaras',unit:'g'},
+      {name:'Pasta de Pistáchio',category:'Recheios',unit:'g'},
+      {name:'Chocolate Branco',category:'Recheios',unit:'g'},
+      {name:'Pistáchio',category:'Recheios',unit:'g'},
+      {name:'Sal',category:'Outro',unit:'g'},
+      {name:'Farinha de Aveia',category:'Recheios',unit:'g'},
+      {name:'Manteiga de Amendoim',category:'Recheios',unit:'g'},
+      {name:'Amendoim',category:'Recheios',unit:'g'},
+      {name:'Chocolate Negro',category:'Recheios',unit:'g'},
+      {name:'Pasta de Amêndoa',category:'Recheios',unit:'g'},
+      {name:'Raspas de Laranja',category:'Recheios',unit:'g'},
+      {name:'Miolo de Amêndoa',category:'Recheios',unit:'g'},
+    ];
+    seeds.forEach(s=>{
+      const exists=state.inventory.some(i=>i.name.toLowerCase()===s.name.toLowerCase());
+      if(!exists) state.inventory.push({id:uid(),name:s.name,category:s.category,unit:s.unit,brand:'',supplier:'',costPerUnit:0,totalPaid:0,qtyReceived:0,qtyUsed:0,qtyWasted:0,minStock:0,createdAt:Date.now()});
+    });
+    state._ingredientsSeeded=true;
   }
 }
 
