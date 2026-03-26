@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script>
-var APP_V='t1774558665';
+var APP_V='t1774558867';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -372,8 +372,8 @@ function migrateData(){
   if(state.finances&&state.finances.length){
     state.finances.forEach(f=>{ if(!f.category) f.category=''; });
   }
-  // Seed recipe ingredients into inventory if not present (only after Firestore loaded)
-  if(!state._ingredientsSeeded&&firestoreReady){
+  // Seed recipe ingredients into inventory if missing (only after Firestore loaded)
+  if(firestoreReady){
     if(!state.inventory) state.inventory=[];
     const seeds=[
       {name:'Tâmaras Medjool',category:'Tâmaras',unit:'g'},
@@ -389,12 +389,12 @@ function migrateData(){
       {name:'Raspas de Laranja',category:'Recheios',unit:'g'},
       {name:'Miolo de Amêndoa',category:'Recheios',unit:'g'},
     ];
+    let added=false;
     seeds.forEach(s=>{
       const exists=state.inventory.some(i=>i.name.toLowerCase()===s.name.toLowerCase());
-      if(!exists) state.inventory.push({id:uid(),name:s.name,category:s.category,unit:s.unit,brand:'',supplier:'',costPerUnit:0,totalPaid:0,qtyReceived:0,qtyUsed:0,qtyWasted:0,minStock:0,createdAt:Date.now()});
+      if(!exists){state.inventory.push({id:uid(),name:s.name,category:s.category,unit:s.unit,brand:'',supplier:'',costPerUnit:0,totalPaid:0,qtyReceived:0,qtyUsed:0,qtyWasted:0,minStock:0,createdAt:Date.now()});added=true;}
     });
-    state._ingredientsSeeded=true;
-    if(firestoreReady) save();
+    if(added) save();
   }
 }
 
