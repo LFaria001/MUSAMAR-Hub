@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script>
-var APP_V='t1774555386';
+var APP_V='t1774557844';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -494,7 +494,7 @@ function flavorUnitCost(f){
     return f.recipe.reduce((sum,r)=>{
       const inv=(state.inventory||[]).find(i=>i.id===r.inventoryId);
       if(!inv) return sum;
-      const effectivePrice=inv.totalPaid&&inv.qtyReceived?inv.totalPaid/inv.qtyReceived:inv.costPerUnit||0;
+      const effectivePrice=inv.costPerUnit||0;
       if(!effectivePrice) return sum;
       const invUnit=(inv.unit||'un').toLowerCase();
       const rUnit=(r.unit||invUnit).toLowerCase();
@@ -508,7 +508,7 @@ function flavorUnitCost(f){
         inv.subRecipe.forEach(sr=>{
           const subInv=(state.inventory||[]).find(i=>i.id===sr.inventoryId);
           if(!subInv) return;
-          const subEff=subInv.totalPaid&&subInv.qtyReceived?subInv.totalPaid/subInv.qtyReceived:subInv.costPerUnit||0;
+          const subEff=subInv.costPerUnit||0;
           if(!subEff) return;
           const subQty=r.qty*(sr.qtyPer100/100);
           const subIU=(subInv.unit||'un').toLowerCase();
@@ -549,7 +549,7 @@ function getCustomerStats(cId){
   return {count:ords.length,total,first:dates[0]||'',last:dates[dates.length-1]||''};
 }
 
-function invCurrentStock(item){ return (parseFloat(item.qtyReceived)||0)-(parseFloat(item.qtyUsed)||0)-(parseFloat(item.qtyWasted)||0); }
+
 function thisMonth(dateStr){ if(!dateStr) return false; const now=new Date(); return dateStr.slice(0,7)===now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0'); }
 
 function statusBadge(status){
@@ -1446,23 +1446,17 @@ function renderInventory(el){
       <div><h1>Inventário</h1><div class="sub">${items.length} itens</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost" onclick="startReceiptScan()">📷 Scan Recibo</button>
-        <button class="btn btn-ghost" onclick="openRestockModal()">+ Reforçar</button>
-        <button class="btn btn-ghost" style="color:var(--red);border-color:var(--red)" onclick="openWasteModal()">🗑 Desperdício</button>
         <button class="btn btn-primary" onclick="openInvModal()">+ Novo Item</button>
       </div>
     </div>
     ${items.length?`<div class="card" style="padding:0;overflow-x:auto"><table class="data-table">
-      <thead><tr><th>Material</th><th>Categoria</th><th>Marca</th><th>Stock</th><th>Custo/un</th><th>Total gasto</th></tr></thead>
+      <thead><tr><th>Material</th><th>Categoria</th><th>Marca</th><th>Preço/un</th></tr></thead>
       <tbody>${items.map(i=>{
-        const stock=invCurrentStock(i);
-        const totalSpent=i.totalPaid!=null?i.totalPaid:(parseFloat(i.qtyReceived)||0)*(parseFloat(i.costPerUnit)||0);
         return `<tr onclick="openInvModal('${i.id}')">
           <td><div style="font-weight:500">${esc(i.name)}</div>${i.supplier?`<div style="font-size:10px;color:var(--dim)">${esc(i.supplier)}</div>`:''}</td>
           <td style="color:var(--muted)">${esc(i.category||'—')}</td>
           <td style="color:var(--muted);font-size:11px">${esc(i.brand||'—')}</td>
-          <td style="font-weight:600">${stock} ${esc(i.unit||'un')}</td>
-          <td style="color:var(--muted)">${(()=>{const price=i.totalPaid&&i.qtyReceived?i.totalPaid/i.qtyReceived:i.costPerUnit||0;if(!price)return '—';const u=i.unit||'un';return u==='g'?fmt(price*1000)+'/kg':u==='ml'?fmt(price*1000)+'/l':fmt(price)+'/'+u;})()}</td>
-          <td style="font-weight:500">${totalSpent>0?fmt(totalSpent):'—'}</td>
+          <td style="font-weight:600">${(()=>{const price=i.costPerUnit||0;if(!price)return '—';const u=i.unit||'un';return u==='g'?fmt(price*1000)+'/kg':u==='ml'?fmt(price*1000)+'/l':fmt(price)+'/'+u;})()}</td>
         </tr>`;
       }).join('')}</tbody>
     </table></div>`:'<div class="empty"><div class="icon">📋</div><p>Sem itens no inventário.</p></div>'}`;
@@ -1476,11 +1470,14 @@ function openInvModal(editId){
   const i=editId?(state.inventory||[]).find(x=>x.id===editId):null;
   const inv=state.inventory||[];
   const suppliers=getInvSuppliers();
+  const unit=i?i.unit||'un':'un';
+  const priceLabel=unit==='g'?'Preço por kg (€)':unit==='ml'?'Preço por litro (€)':`Preço por ${unit} (€)`;
+  const priceValue=i?(unit==='g'?(i.costPerUnit||0)*1000:unit==='ml'?(i.costPerUnit||0)*1000:i.costPerUnit||0):'';
   openModal(i?'Editar Item':'Novo Item de Inventário', `
     <div class="form-group"><label class="label">Nome do material</label><input class="input" id="f-inv-name" value="${esc(i?i.name:'')}"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group"><label class="label">Categoria</label><select class="input" id="f-inv-cat">${INV_CATS.map(c=>`<option ${i&&i.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
-      <div class="form-group"><label class="label">Unidade</label><select class="input" id="f-inv-unit" onchange="updateCostPreview()">${INV_UNITS.map(u=>`<option ${i&&i.unit===u?'selected':(!i&&u==='un'?'selected':'')}>${u}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="label">Unidade</label><select class="input" id="f-inv-unit" onchange="updatePriceLabel()">${INV_UNITS.map(u=>`<option ${i&&i.unit===u?'selected':(!i&&u==='un'?'selected':'')}>${u}</option>`).join('')}</select></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group"><label class="label">Marca</label><input class="input" id="f-inv-brand" value="${esc(i?i.brand:'')}" placeholder="Opcional"></div>
@@ -1492,29 +1489,26 @@ function openInvModal(editId){
       </div>
     </div>
     <div id="f-inv-new-supplier" style="display:none"><div class="form-group"><label class="label">Nome do fornecedor</label><input class="input" id="f-inv-supplier-name" placeholder="Ex: Continente, Makro..."></div></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label class="label">Preço total pago (€)</label><input class="input" type="number" step="0.01" min="0" id="f-inv-cost" value="${i?(i.totalPaid!=null?i.totalPaid:'')||'':''}" oninput="updateCostPreview()"></div>
-      <div class="form-group"><label class="label">Quantidade recebida</label><input class="input" type="number" step="0.01" min="0" id="f-inv-received" value="${i?i.qtyReceived||0:''}" oninput="updateCostPreview()"></div>
-    </div>
-    ${i?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label class="label">Usado</label><input class="input" type="number" step="0.01" min="0" id="f-inv-used" value="${i.qtyUsed||0}"></div>
-      <div class="form-group"><label class="label">Desperdiçado</label><input class="input" type="number" step="0.01" min="0" id="f-inv-wasted" value="${i.qtyWasted||0}"></div>
-    </div>
-    <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;font-weight:600">Sub-receita (opcional)</div>
+    <div class="form-group"><label class="label" id="f-inv-price-label">${priceLabel}</label><input class="input" type="number" step="0.01" min="0" id="f-inv-price" value="${priceValue!==''&&priceValue!==0?Math.round(priceValue*100)/100:''}"></div>
+    ${i?`<div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;font-weight:600">Sub-receita (opcional)</div>
     <div style="font-size:11px;color:var(--dim);margin-bottom:8px">Ingredientes por cada 100${esc(i.unit||'un')} deste item</div>
     <div id="f-inv-subrecipe">${(i.subRecipe||[]).map(sr=>subRecipeRow(sr,inv.filter(x=>x.id!==i.id))).join('')}</div>
     <button class="btn btn-ghost btn-full" onclick="addSubRecipeRow('${i.id}')" style="margin-bottom:16px">+ Sub-ingrediente</button>`:''}
-    <div id="cost-preview" style="font-size:11px;color:var(--dim);text-align:center;margin-bottom:8px"></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary btn-full" onclick="saveInv('${editId||''}')">${i?'Guardar':'Criar Item'}</button>
       ${i?`<button class="btn btn-ghost" onclick="delInv('${i.id}')" style="color:var(--red)">Eliminar</button>`:''}
     </div>
   `);
-  updateCostPreview();
   if(!i&&!suppliers.length){
     const sel=document.getElementById('f-inv-supplier');
     if(sel){sel.value='__new';document.getElementById('f-inv-new-supplier').style.display='block';}
   }
+}
+
+function updatePriceLabel(){
+  const u=$('#f-inv-unit')?.value||'un';
+  const lbl=document.getElementById('f-inv-price-label');
+  if(lbl) lbl.textContent=u==='g'?'Preço por kg (€)':u==='ml'?'Preço por litro (€)':`Preço por ${u} (€)`;
 }
 
 function subRecipeRow(sr,inv){
@@ -1546,16 +1540,18 @@ function saveInv(editId){
   pushUndo(editId?'Editar inventário':'Novo item inventário');
   let supplier=$('#f-inv-supplier').value;
   if(supplier==='__new') supplier=$('#f-inv-supplier-name').value.trim();
-  const totalPaid=parseFloat($('#f-inv-cost').value)||0;
-  const qtyRec=Math.round((parseFloat($('#f-inv-received').value)||0)*100)/100;
-  const costPerUnit=qtyRec>0?Math.round((totalPaid/qtyRec)*10000)/10000:0;
+  const unit=$('#f-inv-unit').value;
+  const displayPrice=parseFloat($('#f-inv-price').value)||0;
+  // Convert display price (per kg/l) to cost per base unit (g/ml)
+  const costPerUnit=(unit==='g'||unit==='ml')?Math.round((displayPrice/1000)*10000)/10000:Math.round(displayPrice*10000)/10000;
+  const existing=editId?(state.inventory||[]).find(x=>x.id===editId):null;
   const data={
-    name,category:$('#f-inv-cat').value,unit:$('#f-inv-unit').value,
+    name,category:$('#f-inv-cat').value,unit,
     brand:$('#f-inv-brand').value.trim(),supplier,costPerUnit,
-    totalPaid:Math.round(totalPaid*100)/100,
-    qtyReceived:qtyRec,
-    qtyUsed:editId?Math.round((parseFloat($('#f-inv-used').value)||0)*100)/100:0,
-    qtyWasted:editId?Math.round((parseFloat($('#f-inv-wasted').value)||0)*100)/100:0,
+    totalPaid:existing?existing.totalPaid||0:0,
+    qtyReceived:existing?existing.qtyReceived||0:0,
+    qtyUsed:existing?existing.qtyUsed||0:0,
+    qtyWasted:existing?existing.qtyWasted||0:0,
   };
   if(editId){
     const subRecipe=[];
@@ -1574,77 +1570,7 @@ function saveInv(editId){
 }
 function delInv(id){pushUndo('Eliminar item inventário');state.inventory=(state.inventory||[]).filter(x=>x.id!==id);save();closeModal();render();}
 
-function openRestockModal(){
-  const items=state.inventory||[];
-  if(!items.length){toast('Adiciona primeiro itens ao inventário.');return;}
-  openModal('Reforçar Stock', `
-    <div class="form-group"><label class="label">Item</label><select class="input" id="f-restock-item" onchange="onRestockItemChange()">
-      <option value="">— Selecionar —</option>
-      ${items.map(i=>`<option value="${i.id}">${esc(i.name)} (${esc(i.category||'')}) — stock: ${invCurrentStock(i)} ${esc(i.unit||'un')}</option>`).join('')}
-    </select></div>
-    <div id="f-restock-details" style="display:none">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="form-group"><label class="label">Quantidade</label><input class="input" type="number" step="0.01" min="0" id="f-restock-qty" oninput="updateRestockPreview()"></div>
-        <div class="form-group"><label class="label">Preço total (€)</label><input class="input" type="number" step="0.01" min="0" id="f-restock-price" oninput="updateRestockPreview()"></div>
-      </div>
-      <div id="restock-cost-preview" style="font-size:11px;color:var(--dim);text-align:center;margin-bottom:8px"></div>
-    </div>
-    <button class="btn btn-primary btn-full" onclick="saveRestock()">Reforçar</button>
-  `);
-}
-function onRestockItemChange(){
-  const id=$('#f-restock-item').value;
-  document.getElementById('f-restock-details').style.display=id?'block':'none';
-}
-function updateRestockPreview(){
-  const el=document.getElementById('restock-cost-preview');if(!el)return;
-  const total=parseFloat($('#f-restock-price')?.value)||0;
-  const qty=parseFloat($('#f-restock-qty')?.value)||0;
-  const id=$('#f-restock-item')?.value;
-  const item=id?(state.inventory||[]).find(i=>i.id===id):null;
-  const unit=item?(item.unit||'un'):'un';
-  if(total>0&&qty>0) el.textContent=fmt(total)+' ÷ '+qty+unit+' = '+fmt(total/qty)+'/'+unit;
-  else el.textContent='';
-}
-function saveRestock(){
-  pushUndo('Reforçar stock');
-  const id=$('#f-restock-item').value;if(!id)return;
-  const item=(state.inventory||[]).find(i=>i.id===id);if(!item)return;
-  const qty=Math.round((parseFloat($('#f-restock-qty').value)||0)*100)/100;
-  if(qty<=0){toast('Introduz uma quantidade válida.');return;}
-  item.qtyReceived=Math.round(((parseFloat(item.qtyReceived)||0)+qty)*100)/100;
-  const totalPaid=$('#f-restock-price').value.trim();
-  if(totalPaid!==''){
-    const paidNum=Math.round(parseFloat(totalPaid)*100)/100;
-    item.costPerUnit=qty>0?Math.round((paidNum/qty)*10000)/10000:item.costPerUnit;
-    item.totalPaid=Math.round(((item.totalPaid||0)+paidNum)*100)/100;
-  }
-  save();closeModal();render();toast('+'+qty+' '+(item.unit||'un')+' de '+item.name);
-}
-
-function openWasteModal(){
-  const items=(state.inventory||[]).filter(i=>invCurrentStock(i)>0);
-  if(!items.length){toast('Não há itens com stock.');return;}
-  openModal('Registar Desperdício', `
-    <div class="form-group"><label class="label">Item</label><select class="input" id="f-waste-item">
-      <option value="">— Seleciona —</option>
-      ${items.map(i=>`<option value="${i.id}">${esc(i.name)} (${invCurrentStock(i)} ${esc(i.unit||'un')})</option>`).join('')}
-    </select></div>
-    <div class="form-group"><label class="label">Quantidade</label><input class="input" type="number" step="0.01" min="0" id="f-waste-qty"></div>
-    <div class="form-group"><label class="label">Motivo (opcional)</label><input class="input" id="f-waste-reason" placeholder="Ex: expirado, danificado..."></div>
-    <button class="btn btn-primary btn-full" style="background:var(--red)" onclick="saveWaste()">Registar</button>
-  `);
-}
-function saveWaste(){
-  pushUndo('Registar desperdício');
-  const id=$('#f-waste-item').value;if(!id)return;
-  const item=(state.inventory||[]).find(i=>i.id===id);if(!item)return;
-  const qty=Math.round((parseFloat($('#f-waste-qty').value)||0)*100)/100;
-  if(qty<=0){toast('Introduz uma quantidade.');return;}
-  if(qty>invCurrentStock(item)){toast('Excede o stock.');return;}
-  item.qtyWasted=Math.round(((parseFloat(item.qtyWasted)||0)+qty)*100)/100;
-  save();closeModal();render();toast('Desperdício registado.');
-}
+function updateCostPreview(){}
 
 // ===== RECEIPT SCANNER =====
 function startReceiptScan(){
