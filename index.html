@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script>
-var APP_V='t1774565314';
+var APP_V='t1774565978';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -564,7 +564,7 @@ function orderEstimatedCost(o){
   if(pack) cost+=(parseFloat(pack.packagingCost)||0)*totalQty;
   return cost;
 }
-function orderCost(o){ return (parseFloat(o.estimatedCost)||orderEstimatedCost(o))+(parseFloat(o.deliveryCost)||0); }
+function orderCost(o){ return orderEstimatedCost(o)+(parseFloat(o.deliveryCost)||0); }
 function orderProfit(o){ return orderRevenue(o)-orderCost(o); }
 function getCustomerStats(cId){
   const ords=(state.orders||[]).filter(o=>o.customerId===cId&&o.status!=='cancelado');
