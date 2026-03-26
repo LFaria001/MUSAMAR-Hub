@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script>
-var APP_V='t1774565978';
+var APP_V='t1774566373';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -1850,6 +1850,53 @@ function removeExpenseCategory(name){
 
 // ===== ANALYTICS =====
 let analyticsPeriod='all';
+function orderDrillRow(o){
+  const rev=orderRevenue(o),cost=orderCost(o),prof=orderProfit(o);
+  const flavStr=(o.flavors||[]).map(f=>f.qty+'× '+f.flavorName).join(', ');
+  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;font-size:12px" onclick="closeModal();viewOrder('${o.id}')">
+    <div><div style="font-weight:600">#${o.orderNum} — ${esc(o.customerName||'?')}</div><div style="font-size:10px;color:var(--dim)">${o.date||'?'} · ${flavStr}</div></div>
+    <div style="text-align:right"><div style="color:var(--green);font-weight:600">${fmt(rev)}</div><div style="font-size:10px;color:var(--dim)">Custo ${fmt(cost)} · Lucro ${fmt(prof)}</div></div>
+  </div>`;
+}
+function drillOrders(title,orders){
+  const total=orders.reduce((s,o)=>s+orderRevenue(o),0);
+  const totalCost=orders.reduce((s,o)=>s+orderCost(o),0);
+  const totalProfit=total-totalCost;
+  openModal(title+' — '+orders.length+' encomendas',`
+    <div style="display:flex;justify-content:space-between;margin-bottom:12px;font-size:12px;font-weight:600">
+      <span>Receita: <span style="color:var(--green)">${fmt(total)}</span></span>
+      <span>Custo: <span style="color:var(--red)">${fmt(totalCost)}</span></span>
+      <span>Lucro: <span style="color:${totalProfit>=0?'var(--green)':'var(--red)'}">${fmt(totalProfit)}</span></span>
+    </div>
+    ${orders.map(o=>orderDrillRow(o)).join('')}
+  `);
+}
+function drillExpenses(expenses){
+  openModal('Despesas Operacionais — '+expenses.length,`
+    ${expenses.map(e=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <div><div style="font-weight:500">${esc(e.description||'Sem descrição')}</div><div style="font-size:10px;color:var(--dim)">${e.date||'?'}${e.category?' · '+esc(e.category):''}</div></div>
+      <div style="font-weight:600;color:var(--red)">${fmt(parseFloat(e.amount)||0)}</div>
+    </div>`).join('')}
+    <div style="display:flex;justify-content:flex-end;padding:8px 0;font-size:13px;font-weight:600">Total: ${fmt(expenses.reduce((s,e)=>s+(parseFloat(e.amount)||0),0))}</div>
+  `);
+}
+function drillByFlavor(name){
+  const orders=(window._aFiltered||[]).filter(o=>(o.flavors||[]).some(f=>f.flavorName===name));
+  drillOrders('Sabor: '+name,orders);
+}
+function drillByChannel(ch){
+  const orders=(window._aFiltered||[]).filter(o=>(o.channel||'Outro')===ch);
+  drillOrders('Canal: '+ch,orders);
+}
+function drillByCustomer(name){
+  const orders=(state.orders||[]).filter(o=>o.status!=='cancelado'&&o.customerName===name);
+  drillOrders('Cliente: '+name,orders);
+}
+function drillByMonth(monthKey){
+  const orders=(state.orders||[]).filter(o=>o.status!=='cancelado'&&o.date&&o.date.slice(0,7)===monthKey);
+  drillOrders('Mês: '+monthKey,orders);
+}
+
 function renderAnalytics(el){
   const orders=(state.orders||[]).filter(o=>o.status!=='cancelado');
   const now=new Date();
@@ -1919,6 +1966,10 @@ function renderAnalytics(el){
     return {name:c.name,orders:cOrds.length,total:cOrds.reduce((s,o)=>s+orderRevenue(o),0)};
   }).sort((a,b)=>b.total-a.total).slice(0,5);
 
+  // Store for drill-down access
+  window._aFiltered=filtered;
+  window._aFilteredExp=filteredExpenses;
+
   el.innerHTML=`
     <div class="section-header"><div><h1>Analytics</h1><div class="sub">Métricas do negócio</div></div></div>
     <div class="pills" style="margin-bottom:20px">
@@ -1929,13 +1980,13 @@ function renderAnalytics(el){
     </div>
 
     <div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
-      <div class="kpi-card"><div class="kpi-label">Receita</div><div class="kpi-value" style="color:var(--green)">${fmt(totalRev)}</div><div class="kpi-sub">${filtered.length} encomendas</div></div>
-      <div class="kpi-card"><div class="kpi-label">Custo Vendas</div><div class="kpi-value" style="color:var(--red)">${fmt(totalCost)}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Lucro Bruto</div><div class="kpi-value" style="color:${totalProfit>=0?'var(--green)':'var(--red)'}">${fmt(totalProfit)}</div><div class="kpi-sub">Margem ${avgMargin.toFixed(1)}%</div></div>
+      <div class="kpi-card" style="cursor:pointer" onclick="drillOrders('Receita',_aFiltered)"><div class="kpi-label">Receita</div><div class="kpi-value" style="color:var(--green)">${fmt(totalRev)}</div><div class="kpi-sub">${filtered.length} encomendas</div></div>
+      <div class="kpi-card" style="cursor:pointer" onclick="drillOrders('Custo Vendas',_aFiltered)"><div class="kpi-label">Custo Vendas</div><div class="kpi-value" style="color:var(--red)">${fmt(totalCost)}</div></div>
+      <div class="kpi-card" style="cursor:pointer" onclick="drillOrders('Lucro Bruto',_aFiltered)"><div class="kpi-label">Lucro Bruto</div><div class="kpi-value" style="color:${totalProfit>=0?'var(--green)':'var(--red)'}">${fmt(totalProfit)}</div><div class="kpi-sub">Margem ${avgMargin.toFixed(1)}%</div></div>
       <div class="kpi-card"><div class="kpi-label">Investimento Inv.</div><div class="kpi-value" style="color:var(--red)">${fmt(totalInvCost)}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Despesas Op.</div><div class="kpi-value" style="color:var(--red)">${fmt(totalExpenses)}</div></div>
+      <div class="kpi-card" style="cursor:pointer" onclick="drillExpenses(_aFilteredExp)"><div class="kpi-label">Despesas Op.</div><div class="kpi-value" style="color:var(--red)">${fmt(totalExpenses)}</div></div>
       <div class="kpi-card"><div class="kpi-label">Lucro Líquido</div><div class="kpi-value" style="color:${netProfit>=0?'var(--gold)':'var(--red)'}">${fmt(netProfit)}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Ticket Médio</div><div class="kpi-value">${fmt(avgTicket)}</div></div>
+      <div class="kpi-card" style="cursor:pointer" onclick="drillOrders('Ticket Médio',_aFiltered)"><div class="kpi-label">Ticket Médio</div><div class="kpi-value">${fmt(avgTicket)}</div></div>
       <div class="kpi-card"><div class="kpi-label">Unidades</div><div class="kpi-value">${Math.round(totalUnits)}</div><div class="kpi-sub">tâmaras</div></div>
     </div>
 
@@ -1952,7 +2003,7 @@ function renderAnalytics(el){
     ${monthKeys.length>1?`<div class="card" style="padding:18px;margin-bottom:16px">
       <div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:12px;font-weight:600">Evolução Mensal</div>
       <div style="display:flex;align-items:flex-end;gap:4px;height:120px">
-        ${monthKeys.map(k=>{const d=monthlyData[k];const h=Math.max(4,Math.round(d.rev/maxMonthRev*100));return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+        ${monthKeys.map(k=>{const d=monthlyData[k];const h=Math.max(4,Math.round(d.rev/maxMonthRev*100));return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer" onclick="drillByMonth('${k}')">
           <div style="font-size:9px;color:var(--muted)">${fmt(d.rev)}</div>
           <div style="width:100%;max-width:40px;height:${h}px;background:var(--gold);border-radius:4px 4px 0 0;min-height:4px"></div>
           <div style="font-size:8px;color:var(--dim)">${k.slice(5)}</div>
@@ -1963,17 +2014,17 @@ function renderAnalytics(el){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
       <div class="card" style="padding:14px">
         <div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;font-weight:600">Top Sabores</div>
-        ${topFlavors.length?topFlavors.map(f=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border)"><span>${esc(f.name)}</span><span style="font-weight:600">${f.qty}×</span></div>`).join(''):'<div style="font-size:11px;color:var(--dim)">Sem dados</div>'}
+        ${topFlavors.length?topFlavors.map(f=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border);cursor:pointer" onclick="drillByFlavor('${esc(f.name)}')"><span>${esc(f.name)}</span><span style="font-weight:600">${f.qty}×</span></div>`).join(''):'<div style="font-size:11px;color:var(--dim)">Sem dados</div>'}
       </div>
       <div class="card" style="padding:14px">
         <div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;font-weight:600">Vendas por Canal</div>
-        ${channels.length?channels.map(([ch,d])=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border)"><span>${esc(ch)}</span><span style="font-weight:600">${fmt(d.rev)}</span></div>`).join(''):'<div style="font-size:11px;color:var(--dim)">Sem dados</div>'}
+        ${channels.length?channels.map(([ch,d])=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid var(--border);cursor:pointer" onclick="drillByChannel('${esc(ch)}')"><span>${esc(ch)}</span><span style="font-weight:600">${fmt(d.rev)}</span></div>`).join(''):'<div style="font-size:11px;color:var(--dim)">Sem dados</div>'}
       </div>
     </div>
 
     ${custLTV.length?`<div class="card" style="padding:14px;margin-bottom:16px">
       <div style="font-size:10px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px;font-weight:600">Top Clientes</div>
-      ${custLTV.map(c=>`<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;border-bottom:1px solid var(--border)">
+      ${custLTV.map(c=>`<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;border-bottom:1px solid var(--border);cursor:pointer" onclick="drillByCustomer('${esc(c.name)}')">
         <span>${esc(c.name)} <span style="color:var(--dim)">(${c.orders} enc.)</span></span>
         <span style="font-weight:600;color:var(--green)">${fmt(c.total)}</span>
       </div>`).join('')}
