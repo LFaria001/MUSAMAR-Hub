@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script>
-var APP_V='t1774564576';
+var APP_V='t1774564894';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -388,8 +388,6 @@ function migrateData(){
       {name:'Pasta de Amêndoa',category:'Recheios',unit:'g'},
       {name:'Raspas de Laranja',category:'Recheios',unit:'g'},
       {name:'Miolo de Amêndoa',category:'Recheios',unit:'g'},
-      {name:'Fita',category:'Embalagem',unit:'un'},
-      {name:'Cupcakes',category:'Embalagem',unit:'un'},
     ];
     let added=false;
     seeds.forEach(s=>{
@@ -1200,43 +1198,54 @@ function openPackModal(editId){
     <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:12px"><div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;font-weight:600">Novo Pack</div></div></div>`:''}
     <div class="form-group"><label class="label">Tamanho (nº tâmaras)</label><input class="input" type="number" step="1" min="1" id="f-pack-size" value="${p?p.size:''}" placeholder="3, 6 ou 10"></div>
     <div class="form-group"><label class="label">Preço de venda (€)</label><input class="input" type="number" step="0.01" min="0" id="f-pack-price" value="${p?p.salePrice:''}" placeholder="Preço fixo do pack"></div>
-    <div class="form-group"><label class="label">Custo de embalagem (€)</label><input class="input" type="number" step="0.01" min="0" id="f-pack-pkg" value="${p?p.packagingCost:'0'}" placeholder="Custo total da embalagem por pack"></div>
+    <div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;font-weight:600;display:flex;align-items:center;justify-content:space-between">
+      Embalagem <span id="f-pack-pkg-total" style="color:var(--dim);font-weight:400">${p&&p.packagingCost?'= '+fmt(p.packagingCost):''}</span>
+    </div>
+    <div id="f-pack-pkglist">${pkgItems.map(pi=>packPkgRow(pi)).join('')}</div>
+    <button class="btn btn-ghost btn-full" onclick="addPackPkgRow()" style="margin-bottom:12px;font-size:10px">+ Item de embalagem</button>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary btn-full" onclick="savePack('${editId||''}')">${p?'Guardar':'Criar Pack'}</button>
       ${p?`<button class="btn btn-ghost" onclick="delPack('${p.id}')" style="color:var(--red)">Eliminar</button>`:''}
     </div>
   `);
 }
-function packPkgRow(r,inv){
-  r=r||{};inv=inv||(state.inventory||[]).filter(i=>i.category==='Embalagem'||i.category==='Rótulos');
-  return `<div class="pkg-row" style="display:grid;grid-template-columns:2fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
-    <div class="form-group" style="margin:0"><select class="input f-pkg-inv" onchange="calcPackPkgTotal()"><option value="">—</option>${inv.map(i=>`<option value="${i.id}" ${r.inventoryId===i.id?'selected':''}>${esc(i.name)}</option>`).join('')}</select></div>
-    <div class="form-group" style="margin:0"><input class="input f-pkg-qty" type="number" step="1" min="0" value="${r.qty||1}" onchange="calcPackPkgTotal()"></div>
+function packPkgRow(r){
+  r=r||{};
+  return `<div class="pkg-row" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+    <div class="form-group" style="margin:0"><input class="input f-pkg-name" value="${esc(r.name||'')}" placeholder="Ex: Caixa, Fita, Cupcakes..."></div>
+    <div class="form-group" style="margin:0"><input class="input f-pkg-qty" type="number" step="1" min="1" value="${r.qty||1}" placeholder="Qtd" oninput="calcPackPkgTotal()"></div>
+    <div class="form-group" style="margin:0"><input class="input f-pkg-cost" type="number" step="0.01" min="0" value="${r.unitCost||''}" placeholder="€/un" oninput="calcPackPkgTotal()"></div>
     <button class="del-btn" onclick="this.closest('.pkg-row').remove();calcPackPkgTotal()" style="margin-bottom:4px">✕</button>
   </div>`;
 }
 function addPackPkgRow(){
-  const inv=(state.inventory||[]).filter(i=>i.category==='Embalagem'||i.category==='Rótulos');
-  const div=document.createElement('div');div.innerHTML=packPkgRow({},inv);
+  const div=document.createElement('div');div.innerHTML=packPkgRow({});
   document.getElementById('f-pack-pkglist').appendChild(div.firstElementChild);
 }
 function calcPackPkgTotal(){
   let total=0;
   document.querySelectorAll('#f-pack-pkglist .pkg-row').forEach(row=>{
-    const invId=row.querySelector('.f-pkg-inv').value;
     const qty=parseFloat(row.querySelector('.f-pkg-qty').value)||0;
-    const inv=(state.inventory||[]).find(i=>i.id===invId);
-    if(inv&&inv.costPerUnit) total+=inv.costPerUnit*qty;
+    const cost=parseFloat(row.querySelector('.f-pkg-cost').value)||0;
+    total+=qty*cost;
   });
-  const el=document.getElementById('f-pack-pkg');if(el)el.value=total.toFixed(2);
-  const lbl=document.getElementById('f-pack-pkg-calc');if(lbl)lbl.textContent=total>0?'= '+fmt(total):'';
+  const lbl=document.getElementById('f-pack-pkg-total');if(lbl)lbl.textContent=total>0?'= '+fmt(total):'';
 }
 function savePack(editId){
   pushUndo(editId?'Editar pack':'Novo pack');
   const size=parseInt($('#f-pack-size').value);if(!size||size<=0){toast('Introduz um tamanho válido.');return;}
   const salePrice=parseFloat($('#f-pack-price').value)||0;if(salePrice<=0){toast('Introduz um preço de venda.');return;}
-  const packagingCost=parseFloat($('#f-pack-pkg').value)||0;
-  const data={size,salePrice,packagingCost,packagingItems:editId?(state.packs.find(x=>x.id===editId)||{}).packagingItems||[]:[]};
+  const packagingItems=[];
+  let packagingCost=0;
+  document.querySelectorAll('#f-pack-pkglist .pkg-row').forEach(row=>{
+    const name=row.querySelector('.f-pkg-name').value.trim();
+    const qty=parseFloat(row.querySelector('.f-pkg-qty').value)||0;
+    const unitCost=parseFloat(row.querySelector('.f-pkg-cost').value)||0;
+    if(name&&qty>0) packagingItems.push({name,qty,unitCost});
+    packagingCost+=qty*unitCost;
+  });
+  packagingCost=Math.round(packagingCost*100)/100;
+  const data={size,salePrice,packagingCost,packagingItems};
   if(!state.packs) state.packs=[];
   if(editId){const p=state.packs.find(x=>x.id===editId);if(p)Object.assign(p,data);}
   else{data.id=uid();state.packs.push(data);}
