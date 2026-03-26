@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script>
-var APP_V='t1774558867';
+var APP_V='t1774560439';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -1499,10 +1499,10 @@ function openInvModal(editId){
   const priceValue=i?(unit==='g'?(i.costPerUnit||0)*1000:unit==='ml'?(i.costPerUnit||0)*1000:i.costPerUnit||0):'';
   openModal(i?'Editar Item':'Novo Item de Inventário', `
     <div class="form-group"><label class="label">Nome do material</label><input class="input" id="f-inv-name" value="${esc(i?i.name:'')}"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div class="form-group"><label class="label">Categoria</label><select class="input" id="f-inv-cat">${INV_CATS.map(c=>`<option ${i&&i.category===c?'selected':''}>${c}</option>`).join('')}</select></div>
-      <div class="form-group"><label class="label">Unidade</label><select class="input" id="f-inv-unit" onchange="updatePriceLabel()">${INV_UNITS.map(u=>`<option ${i&&i.unit===u?'selected':(!i&&u==='un'?'selected':'')}>${u}</option>`).join('')}</select></div>
-    </div>
+    ${!i?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><label class="label">Categoria</label><select class="input" id="f-inv-cat">${INV_CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>
+      <div class="form-group"><label class="label">Unidade</label><select class="input" id="f-inv-unit" onchange="updatePriceLabel()">${INV_UNITS.map(u=>`<option ${u==='un'?'selected':''}>${u}</option>`).join('')}</select></div>
+    </div>`:''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="form-group"><label class="label">Marca</label><input class="input" id="f-inv-brand" value="${esc(i?i.brand:'')}" placeholder="Opcional"></div>
       <div class="form-group"><label class="label">Fornecedor</label>
@@ -1514,10 +1514,6 @@ function openInvModal(editId){
     </div>
     <div id="f-inv-new-supplier" style="display:none"><div class="form-group"><label class="label">Nome do fornecedor</label><input class="input" id="f-inv-supplier-name" placeholder="Ex: Continente, Makro..."></div></div>
     <div class="form-group"><label class="label" id="f-inv-price-label">${priceLabel}</label><input class="input" type="number" step="0.01" min="0" id="f-inv-price" value="${priceValue!==''&&priceValue!==0?Math.round(priceValue*100)/100:''}"></div>
-    ${i?`<div style="font-size:10px;color:var(--gold);letter-spacing:1px;text-transform:uppercase;margin:16px 0 8px;font-weight:600">Sub-receita (opcional)</div>
-    <div style="font-size:11px;color:var(--dim);margin-bottom:8px">Ingredientes por cada 100${esc(i.unit||'un')} deste item</div>
-    <div id="f-inv-subrecipe">${(i.subRecipe||[]).map(sr=>subRecipeRow(sr,inv.filter(x=>x.id!==i.id))).join('')}</div>
-    <button class="btn btn-ghost btn-full" onclick="addSubRecipeRow('${i.id}')" style="margin-bottom:16px">+ Sub-ingrediente</button>`:''}
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary btn-full" onclick="saveInv('${editId||''}')">${i?'Guardar':'Criar Item'}</button>
       ${i?`<button class="btn btn-ghost" onclick="delInv('${i.id}')" style="color:var(--red)">Eliminar</button>`:''}
@@ -1564,31 +1560,22 @@ function saveInv(editId){
   pushUndo(editId?'Editar inventário':'Novo item inventário');
   let supplier=$('#f-inv-supplier').value;
   if(supplier==='__new') supplier=$('#f-inv-supplier-name').value.trim();
-  const unit=$('#f-inv-unit').value;
-  const displayPrice=parseFloat($('#f-inv-price').value)||0;
-  // Convert display price (per kg/l) to cost per base unit (g/ml)
-  const costPerUnit=(unit==='g'||unit==='ml')?Math.round((displayPrice/1000)*10000)/10000:Math.round(displayPrice*10000)/10000;
   const existing=editId?(state.inventory||[]).find(x=>x.id===editId):null;
+  const unit=editId&&existing?existing.unit||'un':($('#f-inv-unit')?$('#f-inv-unit').value:'un');
+  const displayPrice=parseFloat($('#f-inv-price').value)||0;
+  const costPerUnit=(unit==='g'||unit==='ml')?Math.round((displayPrice/1000)*10000)/10000:Math.round(displayPrice*10000)/10000;
   const data={
-    name,category:$('#f-inv-cat').value,unit,
+    name,
+    category:editId&&existing?existing.category||'Outro':($('#f-inv-cat')?$('#f-inv-cat').value:'Outro'),
+    unit,
     brand:$('#f-inv-brand').value.trim(),supplier,costPerUnit,
     totalPaid:existing?existing.totalPaid||0:0,
     qtyReceived:existing?existing.qtyReceived||0:0,
     qtyUsed:existing?existing.qtyUsed||0:0,
     qtyWasted:existing?existing.qtyWasted||0:0,
   };
-  if(editId){
-    const subRecipe=[];
-    document.querySelectorAll('#f-inv-subrecipe .subrecipe-row').forEach(r=>{
-      const invId=r.querySelector('.f-sr-inv').value;
-      const qty=parseFloat(r.querySelector('.f-sr-qty').value)||0;
-      const unit=r.querySelector('.f-sr-unit').value;
-      if(invId&&qty>0) subRecipe.push({inventoryId:invId,qtyPer100:qty,unit});
-    });
-    data.subRecipe=subRecipe;
-  }
   if(!state.inventory) state.inventory=[];
-  if(editId){const i=state.inventory.find(x=>x.id===editId);if(i){data.minStock=i.minStock||0;Object.assign(i,data);}}
+  if(editId){const i=state.inventory.find(x=>x.id===editId);if(i){data.minStock=i.minStock||0;data.subRecipe=i.subRecipe||[];Object.assign(i,data);}}
   else{data.id=uid();data.createdAt=Date.now();data.minStock=0;state.inventory.push(data);}
   save();closeModal();render();
 }
