@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <script>
-var APP_V='t1774558167';
+var APP_V='t1774558545';
 var APP_UPDATE_STATUS='checking';
 fetch('version.txt?_='+Date.now(),{cache:'no-store'}).then(function(r){return r.text()}).then(function(v){
   v=v.trim();
@@ -345,7 +345,7 @@ function save(){
     finances:state.finances||[], expenseCategories:state.expenseCategories||[],
     orderSeq:state.orderSeq||0,
     // Preserve archived data for rollback
-    _archivedOrders:state._archivedOrders||[],
+    _archivedOrders:state._archivedOrders||[], _ingredientsSeeded:state._ingredientsSeeded||false,
     chat:state.chat||[], objectives:state.objectives||{},
     weekLabel:state.weekLabel||'', weekEnd:state.weekEnd||'',
     futureWeeks:state.futureWeeks||[], accountability:state.accountability||[],
@@ -394,6 +394,7 @@ function migrateData(){
       if(!exists) state.inventory.push({id:uid(),name:s.name,category:s.category,unit:s.unit,brand:'',supplier:'',costPerUnit:0,totalPaid:0,qtyReceived:0,qtyUsed:0,qtyWasted:0,minStock:0,createdAt:Date.now()});
     });
     state._ingredientsSeeded=true;
+    if(firestoreReady) save();
   }
 }
 
@@ -414,7 +415,7 @@ auth.onAuthStateChanged(function(user){
       const data=snap.data();
       // Load all fields
       const fields=['orders','production','flavors','packs','inventory','customers','finances',
-        'expenseCategories','_archivedOrders','chat','objectives','weekLabel','weekEnd',
+        'expenseCategories','_archivedOrders','_ingredientsSeeded','chat','objectives','weekLabel','weekEnd',
         'futureWeeks','accountability','calendar','notes','feedback','inspiration',
         'brandAssets','recipes','productionLogs','orderSeq'];
       fields.forEach(f=>{ if(data[f]!==undefined) state[f]=data[f]; });
